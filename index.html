@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⛏️ Bergwerk Idle</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a2e;color:#e0e0e0;font-family:'Segoe UI',sans-serif;min-height:100vh;overflow-x:hidden}
+h1{text-align:center;padding:10px;font-size:1.3rem;color:#ffd700;text-shadow:0 0 10px rgba(255,215,0,.5)}
+.tabs{display:flex;max-width:440px;margin:0 auto;padding:0 8px;gap:3px;flex-wrap:wrap}
+.tab{flex:1;min-width:60px;padding:7px 4px;text-align:center;background:#16213e;border:1px solid #0f3460;border-radius:8px 8px 0 0;cursor:pointer;font-size:.78rem;color:#888;transition:all .2s}
+.tab.active{background:#0f3460;color:#ffd700;border-bottom-color:transparent}
+.tab:hover{color:#ffd700}
+.panel{display:none;max-width:440px;margin:0 auto;padding:0 10px 16px}
+.panel.active{display:block}
+.counter{text-align:center;font-size:2rem;color:#ffd700;margin:4px 0;text-shadow:0 0 15px rgba(255,215,0,.4)}
+.per-sec{text-align:center;color:#888;font-size:.85rem;margin-bottom:6px}
+.mine-btn{display:block;width:140px;height:140px;margin:6px auto;border-radius:50%;border:4px solid #ffd700;background:radial-gradient(circle at 40% 35%,#4a3728,#2a1f14);cursor:pointer;font-size:2rem;color:#ffd700;text-shadow:0 0 10px rgba(255,215,0,.6);transition:transform .08s,box-shadow .08s;box-shadow:0 0 25px rgba(255,215,0,.25)}
+.mine-btn:active{transform:scale(.92);box-shadow:0 0 40px rgba(255,215,0,.6)}
+.mine-btn.boosted{border-color:#ff6b6b;box-shadow:0 0 30px rgba(255,107,107,.5);animation:pulse .5s infinite alternate}
+@keyframes pulse{from{box-shadow:0 0 25px rgba(255,107,107,.3)}to{box-shadow:0 0 40px rgba(255,107,107,.6)}}
+h2{color:#ffd700;font-size:1rem;margin:10px 0 6px;border-bottom:1px solid #333;padding-bottom:4px}
+.upgrade{display:flex;align-items:center;justify-content:space-between;background:#16213e;border:1px solid #0f3460;border-radius:8px;padding:8px 10px;margin:4px 0;transition:background .2s}
+.upgrade:hover{background:#1a2744}
+.upgrade-info{flex:1;min-width:0}
+.upgrade-name{color:#e0e0e0;font-weight:600;font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upgrade-desc{color:#888;font-size:.7rem;margin-top:1px}
+.upgrade-btn{background:#0f3460;color:#ffd700;border:1px solid #ffd700;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:600;font-size:.78rem;white-space:nowrap;transition:all .15s}
+.upgrade-btn:hover{background:#533483}
+.upgrade-btn.cant{opacity:.4;cursor:default}
+.buy-max{display:block;margin:6px auto;background:#533483;color:#ffd700;border:none;border-radius:6px;padding:5px 14px;cursor:pointer;font-size:.78rem}
+.buy-max:hover{background:#7a4faa}
+.prestige-box{text-align:center;background:linear-gradient(135deg,#1a1a2e,#16213e);border:1px solid #ffd700;border-radius:12px;padding:16px;margin:10px 0}
+.prestige-box h3{color:#ffd700;font-size:1rem;margin-bottom:6px}
+.prestige-box p{color:#aaa;font-size:.78rem;margin:3px 0}
+.prestige-btn{background:linear-gradient(135deg,#ffd700,#ff8c00);color:#1a1a2e;border:none;border-radius:8px;padding:8px 20px;cursor:pointer;font-weight:700;font-size:.9rem;margin-top:8px;transition:transform .1s}
+.prestige-btn:hover{transform:scale(1.05)}
+.prestige-btn.cant{opacity:.3;cursor:default;transform:none}
+.prestige-multiplier{color:#ffd700;font-size:1.2rem;font-weight:700}
+.ach-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:6px}
+.ach{background:#16213e;border:1px solid #0f3460;border-radius:8px;padding:6px;text-align:center;transition:all .3s}
+.ach.done{border-color:#ffd700;background:#1a2744}
+.ach .ach-icon{font-size:1.3rem}
+.ach .ach-name{font-size:.68rem;color:#888;margin-top:1px}
+.ach.done .ach-name{color:#ffd700}
+.ach .ach-tip{font-size:.6rem;color:#555;margin-top:1px}
+.ach.done .ach-tip{color:#aaa}
+.boost-bar{max-width:280px;margin:3px auto;height:4px;background:#333;border-radius:2px;overflow:hidden}
+.boost-fill{height:100%;background:linear-gradient(90deg,#ff6b6b,#ffd700);border-radius:2px;transition:width .1s}
+.boost-text{text-align:center;font-size:.68rem;color:#ff6b6b;margin:1px 0}
+.event-banner{text-align:center;background:linear-gradient(90deg,#0f3460,#533483);border:1px solid #7a4faa;border-radius:8px;padding:6px;margin:4px auto;max-width:420px;font-size:.78rem;color:#e0e0e0}
+.event-banner .event-timer{color:#ff6b6b;font-weight:700}
+.offline-popup{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#16213e;border:2px solid #ffd700;border-radius:12px;padding:20px;text-align:center;z-index:999;box-shadow:0 0 60px rgba(255,215,0,.3)}
+.offline-popup h3{color:#ffd700;margin-bottom:6px}
+.offline-popup p{color:#ccc;font-size:.85rem}
+.offline-popup button{margin-top:10px;background:#ffd700;color:#1a1a2e;border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-weight:700}
+/* Jobs */
+.job{background:#16213e;border:1px solid #0f3460;border-radius:10px;padding:10px;margin:6px 0;transition:background .2s}
+.job:hover{background:#1a2744}
+.job-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.job-name{color:#e0e0e0;font-weight:600;font-size:.88rem}
+.job-pay{color:#ffd700;font-size:.82rem}
+.job-desc{color:#888;font-size:.7rem;margin-bottom:6px}
+.job-bar{height:8px;background:#333;border-radius:4px;overflow:hidden;margin-bottom:4px}
+.job-bar-fill{height:100%;border-radius:4px;transition:width .1s linear}
+.job-bar-fill.working{background:linear-gradient(90deg,#ffd700,#ff8c00)}
+.job-bar-fill.done{background:#4caf50}
+.job-btn{background:#0f3460;color:#ffd700;border:1px solid #ffd700;border-radius:6px;padding:5px 14px;cursor:pointer;font-weight:600;font-size:.8rem;transition:all .15s}
+.job-btn:hover{background:#533483}
+.job-btn:disabled{opacity:.4;cursor:default}
+.job-btn.claim{background:#4caf50;color:#fff;border-color:#4caf50}
+.job-btn.claim:hover{background:#66bb6a}
+/* Stocks */
+.stock{background:#16213e;border:1px solid #0f3460;border-radius:10px;padding:10px;margin:6px 0}
+.stock-top{display:flex;justify-content:space-between;align-items:center}
+.stock-name{color:#e0e0e0;font-weight:600;font-size:.88rem}
+.stock-price{font-size:.9rem;font-weight:700}
+.stock-price.up{color:#4caf50}
+.stock-price.down{color:#ff6b6b}
+.stock-chart{height:30px;display:flex;align-items:flex-end;gap:1px;margin:6px 0}
+.stock-bar{flex:1;background:#0f3460;border-radius:1px 1px 0 0;min-height:2px;transition:height .3s}
+.stock-bar.up{background:#4caf50}
+.stock-bar.down{background:#ff6b6b}
+.stock-btns{display:flex;gap:6px;margin-top:4px}
+.stock-btn{flex:1;padding:5px;border-radius:6px;cursor:pointer;font-size:.78rem;font-weight:600;border:1px solid;transition:all .15s}
+.stock-buy{background:#0f3460;color:#4caf50;border-color:#4caf50}
+.stock-buy:hover{background:#1a3a1a}
+.stock-sell{background:#0f3460;color:#ff6b6b;border-color:#ff6b6b}
+.stock-sell:hover{background:#3a1a1a}
+.stock-btn:disabled{opacity:.3;cursor:default}
+.stock-holding{color:#888;font-size:.72rem;margin-top:3px}
+.float-text{position:fixed;pointer-events:none;font-weight:700;color:#ffd700;font-size:1.1rem;text-shadow:0 0 6px rgba(255,215,0,.6);animation:floatUp .9s ease-out forwards;z-index:99}
+@keyframes floatUp{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-60px)}}
+.particles{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:998}
+.particle{position:absolute;width:6px;height:6px;border-radius:50%;animation:fall 2s linear forwards}
+@keyframes fall{0%{opacity:1;transform:translateY(0) rotate(0)}100%{opacity:0;transform:translateY(100vh) rotate(720deg)}}
+.shake{animation:shake .3s}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+</style>
+</head>
+<body>
+<h1>⛏️ Bergwerk Idle</h1>
+<div class="counter" id="gold">0 Gold</div>
+<div class="per-sec" id="perSec">0 Gold/s</div>
+<div id="boostArea"></div>
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('mine')">⛏️ Mine</div>
+  <div class="tab" onclick="switchTab('jobs')">💼 Jobs</div>
+  <div class="tab" onclick="switchTab('stocks')">📈 Aktien</div>
+  <div class="tab" onclick="switchTab('shop')">🛒 Laden</div>
+  <div class="tab" onclick="switchTab('ach')">🏆</div>
+  <div class="tab" onclick="switchTab('prestige')">✨</div>
+</div>
+
+<div class="panel active" id="tab-mine">
+  <button class="mine-btn" id="mineBtn" onclick="doMine()">⛏️</button>
+  <h2>⚡ Klick-Upgrades</h2><div id="clickUpgrades"></div>
+  <h2>🤖 Auto-Upgrades</h2><div id="autoUpgrades"></div>
+</div>
+
+<div class="panel" id="tab-jobs">
+  <h2>💼 Schichtarbeit</h2><p style="color:#888;font-size:.75rem;margin-bottom:8px">Arbeite für schnelles Gold — Klicke um anzufangen!</p>
+  <div id="jobList"></div>
+</div>
+
+<div class="panel" id="tab-stocks">
+  <h2>📈 Aktienmarkt</h2><p style="color:#888;font-size:.75rem;margin-bottom:8px">Kaufe billig, verkaufe teuer! Preise schwanken alle 3s.</p>
+  <div id="stockList"></div>
+</div>
+
+<div class="panel" id="tab-shop">
+  <h2>⛏️ Klick-Upgrades</h2><div id="clickUpgrades2"></div>
+  <button class="buy-max" onclick="buyMaxClick()">🛒 Max Klick-Upgrades</button>
+  <h2>🤖 Auto-Upgrades</h2><div id="autoUpgrades2"></div>
+  <button class="buy-max" onclick="buyMaxAuto()">🛒 Max Auto-Upgrades</button>
+</div>
+
+<div class="panel" id="tab-ach">
+  <h2>🏆 Erfolge (<span id="achCount">0</span>/<span id="achTotal">0</span>)</h2>
+  <div class="ach-grid" id="achGrid"></div>
+</div>
+
+<div class="panel" id="tab-prestige">
+  <div class="prestige-box">
+    <h3>✨ Prestige</h3>
+    <p>Setze alles zurück für einen dauerhaften Multiplikator!</p>
+    <p>Du bekommst: <span class="prestige-multiplier" id="prestigePreview">x1.0</span></p>
+    <p style="font-size:.68rem;color:#666;margin-top:3px">1 Kristall pro 1M Gesamt-Gold (aktuell: <span id="prestigeGems">0</span> 💎)</p>
+    <button class="prestige-btn cant" id="prestigeBtn" onclick="doPrestige()">✨ Prestige (min. 1M)</button>
+  </div>
+  <h2>💎 Kristall-Upgrades</h2><div id="gemUpgrades"></div>
+</div>
+
+<div id="eventArea"></div>
+
+<script>
+let gold=0,totalGold=0,totalGoldAllTime=0,gps=0,clickPower=1,clickMultiplier=1;
+let gems=0,prestigeMultiplier=1,easter1M=false,easter1B=false;
+let activeBoost=null,boostEnd=0,lastSave=Date.now(),totalClicks=0,totalUpgradesBought=0;
+let currentEvent=null,eventEnd=0;
+let stats_eventsSeen=0,stats_boostsUsed=0,stats_jobsDone=0,stats_stocksTraded=0;
+let achievementsUnlocked=new Set();
+
+const CLICK_UPGRADES=[
+{id:'pick',name:'⚒️ Spitzhacke+',desc:'+1 Klick',base:10,mult:1.18,power:1,count:0},
+{id:'gloves',name:'🧤 Handschuhe',desc:'+3 Klick',base:80,mult:1.18,power:3,count:0},
+{id:'hammer',name:'🔨 Hammer',desc:'+10 Klick',base:600,mult:1.18,power:10,count:0},
+{id:'dynamite',name:'🧨 Dynamit',desc:'+40 Klick',base:4e3,mult:1.18,power:40,count:0},
+{id:'magic',name:'🪄 Magie-Pick',desc:'+200 Klick',base:3e4,mult:1.18,power:200,count:0},
+{id:'titan',name:'⚡ Titan-Schlag',desc:'+1K Klick',base:2e5,mult:1.18,power:1e3,count:0},
+];
+const AUTO_UPGRADES=[
+{id:'miner',name:'⛏️ Bergarbeiter',desc:'+1 Gold/s',base:15,mult:1.15,gps:1,count:0},
+{id:'cart',name:'🛒 Lore',desc:'+5 Gold/s',base:100,mult:1.15,gps:5,count:0},
+{id:'drill',name:'🔧 Bohrer',desc:'+25 Gold/s',base:500,mult:1.15,gps:25,count:0},
+{id:'dwarf',name:'🧔 Zwerg',desc:'+100 Gold/s',base:3e3,mult:1.15,gps:100,count:0},
+{id:'dragon',name:'🐉 Drache',desc:'+500 Gold/s',base:25e3,mult:1.15,gps:500,count:0},
+{id:'portal',name:'🌀 Portal',desc:'+2.5K Gold/s',base:2e5,mult:1.15,gps:2500,count:0},
+{id:'blackhole',name:'🕳️ Schwarzes Loch',desc:'+10K Gold/s',base:15e5,mult:1.15,gps:1e4,count:0},
+{id:'timewarp',name:'⏳ Zeitkrümmung',desc:'+50K Gold/s',base:15e6,mult:1.15,gps:5e4,count:0},
+{id:'singularity',name:'🌟 Singularität',desc:'+250K Gold/s',base:15e7,mult:1.15,gps:25e4,count:0},
+];
+const GEM_UPGRADES=[
+{id:'gemClick',name:'💎 Klick-Verstärker',desc:'+50% Klick pro Level',base:1,mult:2.5,count:0},
+{id:'gemAuto',name:'💎 Auto-Verstärker',desc:'+50% Auto pro Level',base:2,mult:2.5,count:0},
+{id:'gemOffline',name:'💎 Offline-Sammler',desc:'+20% Offline pro Level',base:3,mult:2.5,count:0,max:10},
+{id:'gemLuck',name:'💎 Glückspilz',desc:'+10% Event-Chance',base:2,mult:3,count:0,max:5},
+];
+
+// ===== JOBS =====
+const JOBS=[
+{id:'sweep',name:'🧹 Schacht fegen',desc:'Schnelle Schicht — 5s Arbeit',duration:5,reward:50,multReward:true,count:0},
+{id:'haul',name:'🛒 Erz transportieren',desc:'Schwere Schicht — 15s Arbeit',duration:15,reward:300,multReward:true,count:0},
+{id:'explore',name:'🔦 Stollen erkunden',desc:'Abenteuerliche Schicht — 30s',duration:30,reward:1200,multReward:true,count:0},
+{id:'boss',name:'👔 Schichtleiter sein',desc:'Boss-Schicht — 60s',duration:60,reward:5000,multReward:true,count:0},
+{id:'blast',name:'🧨 Sprengmeister',desc:'Gefährlich! — 120s',duration:120,reward:25000,multReward:true,count:0},
+{id:'excavate',name:'🏔️ Tiefgrabung',desc:'Expedition! — 300s',duration:300,reward:200000,multReward:true,count:0},
+];
+let activeJobs={};
+
+// ===== STOCKS =====
+const STOCKS=[
+{id:'goldmine',name:'⛏️ Goldmine AG',basePrice:100,volatility:0.15},
+{id:'deepcore',name:'💎 DeepCore Inc.',basePrice:500,volatility:0.25},
+{id:'dragon',name:'🐉 DragonSteel',basePrice:2000,volatility:0.35},
+{id:'portal',name:'🌀 PortalTech',basePrice:10000,volatility:0.45},
+{id:'void',name:'🕳️ VoidEnergy',basePrice:50000,volatility:0.55},
+];
+let stockState=[];
+
+function initStocks(){
+  stockState=STOCKS.map(s=>{
+    let price=s.basePrice*(0.8+Math.random()*0.4);
+    return{...s,price,prevPrice:price,history:Array.from({length:12},()=>price*(0.9+Math.random()*0.2)),shares:0,avgBuy:0};
+  });
+}
+function updateStockPrices(){
+  stockState.forEach(s=>{
+    s.prevPrice=s.price;
+    let change=(Math.random()-0.48)*s.volatility;
+    // Mean reversion toward base
+    let reversion=(s.basePrice-s.price)/s.basePrice*0.02;
+    s.price=Math.max(s.basePrice*0.1,s.price*(1+change+reversion));
+    s.history.push(s.price);
+    if(s.history.length>12)s.history.shift();
+  });
+}
+function getStockReward(jobReward){return jobReward*Math.max(1,gps/5);}
+
+function fmt(n){
+  if(n<1e3)return Math.floor(n).toLocaleString('de');
+  if(n<1e6)return (n/1e3).toFixed(1)+'K';
+  if(n<1e9)return (n/1e6).toFixed(1)+'M';
+  if(n<1e12)return (n/1e9).toFixed(1)+'B';
+  return (n/1e12).toFixed(1)+'T';
+}
+function cost(u){return Math.floor(u.base*Math.pow(u.mult,u.count));}
+function fmtTime(s){let m=Math.floor(s/60);s=Math.floor(s%60);return m>0?m+':'+(s<10?'0':'')+s+'s':Math.floor(s)+'s';}
+
+function switchTab(t){
+  const tabs=['mine','jobs','stocks','shop','ach','prestige'];
+  document.querySelectorAll('.tab').forEach((el,i)=>{el.classList.toggle('active',tabs[i]===t);});
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+t).classList.add('active');
+  if(t==='jobs')renderJobs();
+  if(t==='stocks')renderStocks();
+  if(t==='ach')renderAchievements();
+  if(t==='prestige')renderPrestige();
+}
+
+function doMine(){
+  let base=clickPower*clickMultiplier*prestigeMultiplier;
+  let boost=activeBoost==='click'?2:1;
+  let amt=base*boost;
+  gold+=amt;totalGold+=amt;totalGoldAllTime+=amt;totalClicks++;
+  showFloat('+'+fmt(amt));
+  document.getElementById('mineBtn').classList.add('shake');
+  setTimeout(()=>document.getElementById('mineBtn').classList.remove('shake'),300);
+  if(!activeBoost&&Math.random()<0.003+GEM_UPGRADES[3].count*0.01)dropBoost();
+  if(!currentEvent&&Math.random()<0.0005+GEM_UPGRADES[3].count*0.005)triggerEvent();
+  update();
+}
+
+function showFloat(txt){
+  const el=document.createElement('div');el.className='float-text';el.textContent=txt;
+  const btn=document.getElementById('mineBtn'),r=btn.getBoundingClientRect();
+  el.style.left=(r.left+r.width/2-20)+'px';el.style.top=(r.top-10)+'px';
+  document.body.appendChild(el);setTimeout(()=>el.remove(),900);
+}
+
+// ===== UPGRADES =====
+function buyClick(i,qty){let u=CLICK_UPGRADES[i],b=0;for(let q=0;q<(qty||1);q++){let c=cost(u);if(gold<c)break;gold-=c;u.count++;b++;clickPower+=u.power;}if(b){totalUpgradesBought+=b;update();renderAll();}}
+function buyAuto(i,qty){let u=AUTO_UPGRADES[i],b=0;for(let q=0;q<(qty||1);q++){let c=cost(u);if(gold<c)break;gold-=c;u.count++;b++;}if(b){totalUpgradesBought+=b;recalcGPS();update();renderAll();}}
+function buyGem(i){let u=GEM_UPGRADES[i],c=cost(u);if(gems>=c&&(!u.max||u.count<u.max)){gems-=c;u.count++;applyGemUpgrades();renderPrestige();}}
+function buyMaxClick(){CLICK_UPGRADES.forEach((_,i)=>buyClick(i,999));}
+function buyMaxAuto(){AUTO_UPGRADES.forEach((_,i)=>buyAuto(i,999));}
+function recalcGPS(){let b=0;AUTO_UPGRADES.forEach(u=>b+=u.gps*u.count);let g=1+GEM_UPGRADES[1].count*0.5;gps=b*g*prestigeMultiplier;}
+function applyGemUpgrades(){clickMultiplier=1+GEM_UPGRADES[0].count*0.5;recalcGPS();}
+
+// ===== JOBS =====
+function startJob(id){
+  if(activeJobs[id])return;
+  let job=JOBS.find(j=>j.id===id);
+  if(!job)return;
+  activeJobs[id]={start:Date.now(),duration:job.duration*1000,done:false};
+  renderJobs();
+}
+function claimJob(id){
+  let j=activeJobs[id];if(!j||!j.done)return;
+  let job=JOBS.find(jj=>jj.id===id);
+  let reward=job.multReward?job.reward*(1+gps*0.01)*prestigeMultiplier:job.reward;
+  reward=Math.floor(reward);
+  gold+=reward;totalGold+=reward;totalGoldAllTime+=reward;job.count++;stats_jobsDone++;
+  showFloat('+'+fmt(reward));
+  delete activeJobs[id];
+  update();renderJobs();
+}
+function updateJobs(){
+  let now=Date.now();
+  Object.keys(activeJobs).forEach(id=>{
+    let j=activeJobs[id];
+    if(!j.done&&now-j.start>=j.duration){j.done=true;}
+  });
+}
+function renderJobs(){
+  const el=document.getElementById('jobList');
+  el.innerHTML=JOBS.map(job=>{
+    let j=activeJobs[job.id];
+    let reward=job.multReward?Math.floor(job.reward*(1+gps*0.01)*prestigeMultiplier):job.reward;
+    if(j){
+      if(j.done){
+        return `<div class="job"><div class="job-top"><span class="job-name">${job.name}</span><span class="job-pay">${fmt(reward)} 🪙</span></div><div class="job-desc">${job.desc}</div><div class="job-bar"><div class="job-bar-fill done" style="width:100%"></div></div><button class="job-btn claim" onclick="claimJob('${job.id}')">💰 Abholen!</button></div>`;
+      } else {
+        let elapsed=Date.now()-j.start;
+        let pct=Math.min(100,elapsed/j.duration*100);
+        let left=Math.ceil((j.duration-elapsed)/1000);
+        return `<div class="job"><div class="job-top"><span class="job-name">${job.name}</span><span class="job-pay">${fmt(reward)} 🪙</span></div><div class="job-desc">${job.desc}</div><div class="job-bar"><div class="job-bar-fill working" style="width:${pct}%"></div></div><span style="font-size:.72rem;color:#888">${fmtTime(left)} verbleibend</span></div>`;
+      }
+    }
+    return `<div class="job"><div class="job-top"><span class="job-name">${job.name}</span><span class="job-pay">${fmt(reward)} 🪙</span></div><div class="job-desc">${job.desc}</div><button class="job-btn" onclick="startJob('${job.id}')">🔨 Schicht starten (${fmtTime(job.duration)})</button></div>`;
+  }).join('');
+}
+
+// ===== STOCKS =====
+function buyStock(i,qty){
+  let s=stockState[i],total=s.price*qty;
+  if(gold<total)return;
+  let oldTotal=s.shares*s.avgBuy;
+  gold-=total;s.shares+=qty;
+  s.avgBuy=(oldTotal+s.price*qty)/(s.shares||1);
+  stats_stocksTraded++;update();renderStocks();
+}
+function sellStock(i,qty){
+  let s=stockState[i];if(s.shares<qty)return;
+  gold+=s.price*qty;s.shares-=qty;
+  if(s.shares===0)s.avgBuy=0;
+  stats_stocksTraded++;update();renderStocks();
+}
+function sellAllStock(i){let s=stockState[i];if(s.shares>0)sellStock(i,s.shares);}
+function renderStocks(){
+  const el=document.getElementById('stockList');
+  el.innerHTML=stockState.map((s,i)=>{
+    let change=s.price-s.prevPrice;
+    let changePct=((s.price/s.prevPrice-1)*100).toFixed(1);
+    let dir=change>=0?'up':'down';
+    let sign=change>=0?'+':'';
+    let profit=s.shares>0?((s.price-s.avgBuy)/s.avgBuy*100).toFixed(1):0;
+    let profitClass=profit>=0?'up':'down';
+    let maxH=Math.max(...s.history);
+    let chartBars=s.history.map(h=>{
+      let h2=(h/maxH*100).toFixed(0);
+      let d=h>=s.history[s.history.length-2]?'up':'down';
+      return `<div class="stock-bar ${d}" style="height:${h2}%"></div>`;
+    }).join('');
+    let buy1=Math.floor(gold/s.price)||0;
+    return `<div class="stock">
+      <div class="stock-top"><span class="stock-name">${s.name}</span><span class="stock-price ${dir}">${fmt(s.price)} 🪙 (${sign}${changePct}%)</span></div>
+      <div class="stock-chart">${chartBars}</div>
+      <div class="stock-holding">📦 ${s.shares} Aktien ${s.shares>0?`| Ø ${fmt(s.avgBuy)} | P/L <span class="${profitClass}">${profit>=0?'+':''}${profit}%</span>`:''}</div>
+      <div class="stock-btns">
+        <button class="stock-btn stock-buy" onclick="buyStock(${i},1)" ${gold<s.price?'disabled':''}>Kauf 1 (${fmt(s.price)})</button>
+        <button class="stock-btn stock-buy" onclick="buyStock(${i},${buy1})" ${buy1<1?'disabled':''}>Kauf ${buy1}</button>
+        <button class="stock-btn stock-sell" onclick="sellStock(${i},1)" ${s.shares<1?'disabled':''}>Verkauf 1</button>
+        <button class="stock-btn stock-sell" onclick="sellAllStock(${i})" ${s.shares<1?'disabled':''}>Alles</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ===== BOOSTS & EVENTS =====
+function dropBoost(){let t=['click','auto','gold'][Math.floor(Math.random()*3)];activeBoost=t;boostEnd=Date.now()+30000;stats_boostsUsed++;showFloat({click:'⚡Klick x2',auto:'🚀Auto x2',gold:'🤑Gold x3'}[t]);}
+function updateBoost(){if(!activeBoost)return;let left=(boostEnd-Date.now())/1000;if(left<=0){activeBoost=null;document.getElementById('mineBtn').classList.remove('boosted');return;}let names={click:'⚡ Klick x2',auto:'🚀 Auto x2',gold:'🤑 Gold x3'};document.getElementById('boostArea').innerHTML=`<div class="boost-text">${names[activeBoost]} ${fmtTime(left)}</div><div class="boost-bar"><div class="boost-fill" style="width:${left/30*100}%"></div></div>`;document.getElementById('mineBtn').classList.toggle('boosted',activeBoost==='click');}
+function getAutoMultiplier(){return activeBoost==='auto'?2:activeBoost==='gold'?3:1;}
+function triggerEvent(){let e=['goldrush','deepmine','dwarfparty'][Math.floor(Math.random()*3)];currentEvent=e;eventEnd=Date.now()+60000;stats_eventsSeen++;if(e==='goldrush'){activeBoost='auto';boostEnd=eventEnd;}if(e==='deepmine'){activeBoost='click';boostEnd=eventEnd;}if(e==='dwarfparty'){activeBoost='gold';boostEnd=eventEnd;}}
+function updateEvent(){if(!currentEvent)return;let left=(eventEnd-Date.now())/1000;if(left<=0){currentEvent=null;document.getElementById('eventArea').innerHTML='';return;}let names={goldrush:'🤑 Goldrausch',deepmine:'⛏️ Tiefe Mine',dwarfparty:'🧔 Zwergenfest'};document.getElementById('eventArea').innerHTML=`<div class="event-banner">${names[currentEvent]}! <span class="event-timer">${fmtTime(left)}</span></div>`;}
+
+// ===== ACHIEVEMENTS =====
+const ACHIEVEMENTS=[
+{id:'click10',name:'Erste Schritte',icon:'👆',tip:'10 Klicks',check:()=>totalClicks>=10},
+{id:'click100',name:'Fleißig',icon:'💪',tip:'100 Klicks',check:()=>totalClicks>=100},
+{id:'click1k',name:'Klick-Maschine',icon:'🤖',tip:'1K Klicks',check:()=>totalClicks>=1e3},
+{id:'gold1k',name:'Kleines Vermögen',icon:'🪙',tip:'1K Gold gesamt',check:()=>totalGoldAllTime>=1e3},
+{id:'gold1m',name:'Millionär',icon:'💰',tip:'1M Gold gesamt',check:()=>totalGoldAllTime>=1e6},
+{id:'gold1b',name:'Milliardär',icon:'🏦',tip:'1B Gold gesamt',check:()=>totalGoldAllTime>=1e9},
+{id:'gold1t',name:'Trillionär',icon:'👑',tip:'1T Gold gesamt',check:()=>totalGoldAllTime>=1e12},
+{id:'upg10',name:'Sammler',icon:'🛒',tip:'10 Upgrades',check:()=>totalUpgradesBought>=10},
+{id:'upg50',name:'Shop-Süchtig',icon:'🏪',tip:'50 Upgrades',check:()=>totalUpgradesBought>=50},
+{id:'upg200',name:'Großkunde',icon:'🏭',tip:'200 Upgrades',check:()=>totalUpgradesBought>=200},
+{id:'prestige1',name:'Neuanfang',icon:'✨',tip:'Erstes Prestige',check:()=>gems>0},
+{id:'speed100',name:'Produktion',icon:'⚡',tip:'100 Gold/s',check:()=>gps>=100},
+{id:'speed100k',name:'Industrie',icon:'🏭',tip:'100K Gold/s',check:()=>gps>=1e5},
+{id:'job10',name:'Arbeiter',icon:'💼',tip:'10 Jobs erledigt',check:()=>stats_jobsDone>=10},
+{id:'job100',name:'Schichtarbeiter',icon:'👷',tip:'100 Jobs erledigt',check:()=>stats_jobsDone>=100},
+{id:'stock10',name:'Trader',icon:'📈',tip:'10 Aktien-Trades',check:()=>stats_stocksTraded>=10},
+{id:'stock100',name:'Börsenhai',icon:'🦈',tip:'100 Trades',check:()=>stats_stocksTraded>=100},
+{id:'event1',name:'Glückspilz',icon:'🍀',tip:'Erstes Event',check:()=>stats_eventsSeen>=1},
+{id:'boost1',name:'Turbo!',icon:'🚀',tip:'Erster Boost',check:()=>stats_boostsUsed>=1},
+];
+function checkAchievements(){ACHIEVEMENTS.forEach(a=>{if(!achievementsUnlocked.has(a.id)&&a.check()){achievementsUnlocked.add(a.id);showFloat('🏆 '+a.name);}});}
+function renderAchievements(){document.getElementById('achTotal').textContent=ACHIEVEMENTS.length;document.getElementById('achCount').textContent=achievementsUnlocked.size;document.getElementById('achGrid').innerHTML=ACHIEVEMENTS.map(a=>`<div class="ach${achievementsUnlocked.has(a.id)?' done':''}"><div class="ach-icon">${achievementsUnlocked.has(a.id)?a.icon:'🔒'}</div><div class="ach-name">${achievementsUnlocked.has(a.id)?a.name:'???'}</div><div class="ach-tip">${a.tip}</div></div>`).join('');}
+
+// ===== PRESTIGE =====
+function getPrestigeGems(){return Math.floor(totalGoldAllTime/1e6);}
+function doPrestige(){if(totalGoldAllTime<1e6)return;gems+=getPrestigeGems();prestigeMultiplier=1+gems*0.1;gold=0;totalGold=0;totalGoldAllTime=0;gps=0;clickPower=1;clickMultiplier=1;totalClicks=0;totalUpgradesBought=0;activeBoost=null;boostEnd=0;currentEvent=null;eventEnd=0;easter1M=false;easter1B=false;CLICK_UPGRADES.forEach(u=>u.count=0);AUTO_UPGRADES.forEach(u=>u.count=0);activeJobs={};stockState.forEach(s=>{s.shares=0;s.avgBuy=0;});applyGemUpgrades();update();renderAll();switchTab('prestige');spawnParticles();}
+function renderPrestige(){let pg=getPrestigeGems(),pm=1+(gems+pg)*0.1;document.getElementById('prestigePreview').textContent='x'+pm.toFixed(1);document.getElementById('prestigeGems').textContent=pg;let btn=document.getElementById('prestigeBtn');btn.classList.toggle('cant',totalGoldAllTime<1e6);btn.textContent=totalGoldAllTime>=1e6?`✨ Prestige (+${pg} 💎)`:'✨ Prestige (min. 1M)';document.getElementById('gemUpgrades').innerHTML=GEM_UPGRADES.map((u,i)=>{let c=cost(u),can=gems>=c,atMax=u.max&&u.count>=u.max;return `<div class="upgrade"><div class="upgrade-info"><div class="upgrade-name">${u.name} (${u.count}${u.max?'/'+u.max:''})</div><div class="upgrade-desc">${u.desc}</div></div><button class="upgrade-btn${can&&!atMax?'':' cant'}" onclick="buyGem(${i})">${atMax?'MAX':fmt(c)+' 💎'}</button></div>`;}).join('');}
+
+// ===== RENDER =====
+function renderUpgrades(container,click){let list=click?CLICK_UPGRADES:AUTO_UPGRADES;let fn=click?'buyClick':'buyAuto';document.getElementById(container).innerHTML=list.map((u,i)=>{let c=cost(u),can=gold>=c;let desc=click?`+${fmt(u.power)} Klick`:`+${fmt(u.gps)} Gold/s`;return `<div class="upgrade"><div class="upgrade-info"><div class="upgrade-name">${u.name} (${u.count})</div><div class="upgrade-desc">${desc}</div></div><button class="upgrade-btn${can?'':' cant'}" onclick="${fn}(${i})">${fmt(c)} 🪙</button></div>`;}).join('');}
+function renderAll(){renderUpgrades('clickUpgrades',true);renderUpgrades('autoUpgrades',false);renderUpgrades('clickUpgrades2',true);renderUpgrades('autoUpgrades2',false);}
+function update(){document.getElementById('gold').textContent=fmt(gold)+' Gold';let gpsD=gps*prestigeMultiplier*getAutoMultiplier();document.getElementById('perSec').textContent=fmt(gpsD)+' Gold/s';updateBoost();updateEvent();}
+
+// ===== GAME LOOP =====
+setInterval(()=>{if(gps>0){let m=prestigeMultiplier*getAutoMultiplier();let a=gps*m/10;gold+=a;totalGold+=a;totalGoldAllTime+=a;}updateJobs();update();},100);
+setInterval(()=>{updateStockPrices();if(document.getElementById('tab-stocks').classList.contains('active'))renderStocks();},3000);
+setInterval(()=>renderAll(),500);
+setInterval(()=>{checkAchievements();checkEasterEggs();},1000);
+
+function checkEasterEggs(){
+  if(totalGoldAllTime>=1e6&&!easter1M){easter1M=true;showOverlay('🎉 1 Million! 🎉','Berggeist verdoppelt alles!','Klicken zum Fortfahren',()=>{AUTO_UPGRADES.forEach(u=>u.gps*=2);CLICK_UPGRADES.forEach(u=>u.power*=2);recalcGPS();});}
+  if(totalGoldAllTime>=1e9&&!easter1B){easter1B=true;showOverlay('💎 1 Milliarde! 💎','Kristalldrache erwacht!','Klick-Kraft x5!',()=>{clickMultiplier*=5;});}
+}
+function showOverlay(title,sub,action,cb){const o=document.createElement('div');o.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:999';o.innerHTML=`<div style="text-align:center"><h2 style="font-size:1.8rem;color:#ffd700;margin-bottom:10px">${title}</h2><p style="color:#ccc;font-size:.9rem">${sub}</p><p style="margin-top:6px;color:#666;font-size:.75rem">${action}</p></div>`;o.onclick=()=>{o.remove();cb();spawnParticles();};document.body.appendChild(o);}
+function spawnParticles(){const c=document.createElement('div');c.className='particles';for(let i=0;i<40;i++){const p=document.createElement('div');p.className='particle';p.style.left=Math.random()*100+'%';p.style.top='-10px';p.style.background=['#ffd700','#ff6b6b','#533483','#00d2ff'][Math.floor(Math.random()*4)];p.style.animationDelay=Math.random()*2+'s';c.appendChild(p);}document.body.appendChild(c);setTimeout(()=>c.remove(),4000);}
+
+// ===== OFFLINE =====
+function calcOffline(){let now=Date.now(),elapsed=(now-lastSave)/1000;if(elapsed>30&&gps>0){let eff=Math.min(1,0.5+GEM_UPGRADES[2].count*0.2);let earned=gps*prestigeMultiplier*elapsed*eff;gold+=earned;totalGold+=earned;totalGoldAllTime+=earned;showOffline(earned,elapsed);}lastSave=now;}
+function showOffline(earned,elapsed){const o=document.createElement('div');o.className='offline-popup';o.innerHTML=`<h3>🌙 Willkommen zurück!</h3><p>Während du weg warst (${fmtTime(elapsed)}):</p><p style="font-size:1.2rem;color:#ffd700;margin:6px 0">+${fmt(earned)} Gold</p><button onclick="this.parentElement.remove()">Nice! 👍</button>`;document.body.appendChild(o);}
+
+// ===== SAVE/LOAD =====
+function save(){localStorage.setItem('bergwerk3',JSON.stringify({gold,totalGold,totalGoldAllTime,gems,prestigeMultiplier,clickPower,clickMultiplier,easter1M,easter1B,clickCounts:CLICK_UPGRADES.map(u=>u.count),autoCounts:AUTO_UPGRADES.map(u=>u.count),gemCounts:GEM_UPGRADES.map(u=>u.count),achievements:[...achievementsUnlocked],totalClicks,totalUpgradesBought,stats_eventsSeen,stats_boostsUsed,stats_jobsDone,stats_stocksTraded,jobCounts:JOBS.map(j=>j.count),stockShares:stockState.map(s=>s.shares),stockAvgBuy:stockState.map(s=>s.avgBuy),lastSave:Date.now()}));}
+function load(){const d=localStorage.getItem('bergwerk3');if(!d){initStocks();return;}const s=JSON.parse(d);gold=s.gold||0;totalGold=s.totalGold||0;totalGoldAllTime=s.totalGoldAllTime||0;gems=s.gems||0;prestigeMultiplier=s.prestigeMultiplier||1;clickPower=s.clickPower||1;clickMultiplier=s.clickMultiplier||1;easter1M=s.easter1M||false;easter1B=s.easter1B||false;totalClicks=s.totalClicks||0;totalUpgradesBought=s.totalUpgradesBought||0;stats_eventsSeen=s.stats_eventsSeen||0;stats_boostsUsed=s.stats_boostsUsed||0;stats_jobsDone=s.stats_jobsDone||0;stats_stocksTraded=s.stats_stocksTraded||0;if(s.clickCounts)s.clickCounts.forEach((c,i)=>{CLICK_UPGRADES[i].count=c;});if(s.autoCounts)s.autoCounts.forEach((c,i)=>{AUTO_UPGRADES[i].count=c;});if(s.gemCounts)s.gemCounts.forEach((c,i)=>{GEM_UPGRADES[i].count=c;});if(s.achievements)achievementsUnlocked=new Set(s.achievements);if(s.jobCounts)s.jobCounts.forEach((c,i)=>{JOBS[i].count=c;});lastSave=s.lastSave||Date.now();initStocks();if(s.stockShares)s.stockShares.forEach((c,i)=>{stockState[i].shares=c;});if(s.stockAvgBuy)s.stockAvgBuy.forEach((c,i)=>{stockState[i].avgBuy=c;});applyGemUpgrades();calcOffline();}
+window.onbeforeunload=save;
+setInterval(save,15000);
+load();update();renderAll();
+</script>
+</body>
+</html>
