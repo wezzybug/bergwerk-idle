@@ -103,6 +103,32 @@ h2{color:#ffd700;font-size:1rem;margin:10px 0 6px;border-bottom:1px solid #333;p
 @keyframes fall{0%{opacity:1;transform:translateY(0) rotate(0)}100%{opacity:0;transform:translateY(100vh) rotate(720deg)}}
 .shake{animation:shake .3s}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+/* Ad System */
+.ad-box{background:#16213e;border:1px solid #0f3460;border-radius:12px;padding:12px;margin:8px 0;transition:all .2s}
+.ad-box:hover{background:#1a2744}
+.ad-box.active-boost{border-color:#ffd700;box-shadow:0 0 15px rgba(255,215,0,.2)}
+.ad-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.ad-name{color:#e0e0e0;font-weight:600;font-size:.9rem}
+.ad-reward{color:#4caf50;font-size:.78rem;font-weight:600}
+.ad-desc{color:#888;font-size:.72rem;margin-bottom:8px}
+.ad-btn{display:block;width:100%;padding:8px;border-radius:8px;cursor:pointer;font-weight:700;font-size:.82rem;border:none;transition:all .15s}
+.ad-btn.watch{background:linear-gradient(135deg,#533483,#e94560);color:#fff}
+.ad-btn.watch:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(233,69,96,.4)}
+.ad-btn.cooldown{background:#333;color:#666;cursor:default}
+.ad-btn.running{background:#333;color:#ffd700;cursor:default}
+.ad-progress{height:6px;background:#333;border-radius:3px;overflow:hidden;margin-top:6px}
+.ad-progress-fill{height:100%;background:linear-gradient(90deg,#e94560,#ffd700);border-radius:3px;transition:width .3s}
+.ad-timer{color:#888;font-size:.68rem;text-align:center;margin-top:3px}
+.ad-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff}
+.ad-overlay h2{color:#ffd700;font-size:1.3rem;margin-bottom:10px}
+.ad-overlay p{color:#aaa;font-size:.85rem;margin-bottom:20px}
+.ad-overlay .ad-countdown{font-size:3rem;font-weight:700;color:#ffd700;text-shadow:0 0 20px rgba(255,215,0,.5)}
+.ad-overlay .ad-skip{margin-top:20px;background:#533483;color:#ffd700;border:1px solid #ffd700;border-radius:8px;padding:8px 20px;cursor:pointer;font-weight:600;display:none}
+.ad-overlay .ad-skip.visible{display:inline-block}
+.ad-overlay .ad-fake-ad{max-width:340px;background:#16213e;border:1px solid #0f3460;border-radius:12px;padding:16px;text-align:center;margin:10px 0}
+.ad-overlay .ad-fake-ad h3{color:#ffd700;font-size:.9rem;margin-bottom:4px}
+.ad-overlay .ad-fake-ad p{color:#888;font-size:.72rem}
+.ad-overlay .ad-fake-ad .ad-brand{color:#533483;font-size:.6rem;margin-top:6px}
 </style>
 </head>
 <body>
@@ -116,6 +142,7 @@ h2{color:#ffd700;font-size:1rem;margin:10px 0 6px;border-bottom:1px solid #333;p
   <div class="tab" onclick="switchTab('stocks')">📈 Aktien</div>
   <div class="tab" onclick="switchTab('shop')">🛒 Laden</div>
   <div class="tab" onclick="switchTab('ach')">🏆</div>
+  <div class="tab" onclick="switchTab('ads')">📺</div>
   <div class="tab" onclick="switchTab('prestige')">✨</div>
 </div>
 
@@ -145,6 +172,12 @@ h2{color:#ffd700;font-size:1rem;margin:10px 0 6px;border-bottom:1px solid #333;p
 <div class="panel" id="tab-ach">
   <h2>🏆 Erfolge (<span id="achCount">0</span>/<span id="achTotal">0</span>)</h2>
   <div class="ach-grid" id="achGrid"></div>
+</div>
+
+<div class="panel" id="tab-ads">
+  <h2>📺 Werbung ansehen für Boosts!</h2>
+  <p style="color:#888;font-size:.75rem;margin-bottom:8px">Schaue eine kurze Werbung und erhalte starke Bonusse!</p>
+  <div id="adList"></div>
 </div>
 
 <div class="panel" id="tab-prestige">
@@ -275,19 +308,22 @@ function cost(u){return Math.floor(u.base*Math.pow(u.mult,u.count));}
 function fmtTime(s){let m=Math.floor(s/60);s=Math.floor(s%60);return m>0?m+':'+(s<10?'0':'')+s+'s':Math.floor(s)+'s';}
 
 function switchTab(t){
-  const tabs=['mine','jobs','stocks','shop','ach','prestige'];
+  const tabs=['mine','jobs','stocks','shop','ach','ads','prestige'];
   document.querySelectorAll('.tab').forEach((el,i)=>{el.classList.toggle('active',tabs[i]===t);});
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('tab-'+t).classList.add('active');
   if(t==='jobs')renderJobs();
   if(t==='stocks')renderStocks();
   if(t==='ach')renderAchievements();
+  if(t==='ads')renderAds();
   if(t==='prestige')renderPrestige();
 }
 
 function doMine(){
   let base=clickPower*clickMultiplier*prestigeMultiplier;
   let boost=activeBoost==='click'?2:1;
+  if(activeAdBoost&&activeAdBoost.type==='click')boost*=3;
+  applyAdBoost();
   let amt=base*boost;
   gold+=amt;totalGold+=amt;totalGoldAllTime+=amt;totalClicks++;
   showFloat('+'+fmt(amt));
@@ -320,7 +356,13 @@ function startJob(id){
   if(jobCooldowns[id]&&Date.now()<jobCooldowns[id])return;
   let job=JOBS.find(j=>j.id===id);
   if(!job)return;
-  activeJobs[id]={start:Date.now(),duration:job.duration*1000,done:false};
+  let dur=window._instantJob?0:job.duration*1000;
+  window._instantJob=false;
+  if(dur===0){
+    activeJobs[id]={start:Date.now(),duration:0,done:true};
+  } else {
+    activeJobs[id]={start:Date.now(),duration:dur,done:false};
+  }
   renderJobs();
 }
 function claimJob(id){
@@ -425,7 +467,16 @@ function renderStocks(){
 // ===== BOOSTS & EVENTS =====
 function dropBoost(){let t=['click','auto','gold'][Math.floor(Math.random()*3)];activeBoost=t;boostEnd=Date.now()+30000;stats_boostsUsed++;showFloat({click:'⚡Klick x2',auto:'🚀Auto x2',gold:'🤑Gold x3'}[t]);}
 function updateBoost(){if(!activeBoost)return;let left=(boostEnd-Date.now())/1000;if(left<=0){activeBoost=null;document.getElementById('mineBtn').classList.remove('boosted');return;}let names={click:'⚡ Klick x2',auto:'🚀 Auto x2',gold:'🤑 Gold x3'};document.getElementById('boostArea').innerHTML=`<div class="boost-text">${names[activeBoost]} ${fmtTime(left)}</div><div class="boost-bar"><div class="boost-fill" style="width:${left/30*100}%"></div></div>`;document.getElementById('mineBtn').classList.toggle('boosted',activeBoost==='click');}
-function getAutoMultiplier(){return activeBoost==='auto'?2:activeBoost==='gold'?3:1;}
+function getAutoMultiplier(){
+  let m=1;
+  if(activeBoost==='auto')m=2;
+  if(activeBoost==='gold')m=3;
+  if(activeAdBoost){
+    if(activeAdBoost.type==='gps')m*=2;
+    applyAdBoost();
+  }
+  return m;
+}
 function triggerEvent(){let e=['goldrush','deepmine','dwarfparty'][Math.floor(Math.random()*3)];currentEvent=e;eventEnd=Date.now()+60000;stats_eventsSeen++;if(e==='goldrush'){activeBoost='auto';boostEnd=eventEnd;}if(e==='deepmine'){activeBoost='click';boostEnd=eventEnd;}if(e==='dwarfparty'){activeBoost='gold';boostEnd=eventEnd;}}
 function updateEvent(){if(!currentEvent)return;let left=(eventEnd-Date.now())/1000;if(left<=0){currentEvent=null;document.getElementById('eventArea').innerHTML='';return;}let names={goldrush:'🤑 Goldrausch',deepmine:'⛏️ Tiefe Mine',dwarfparty:'🧔 Zwergenfest'};document.getElementById('eventArea').innerHTML=`<div class="event-banner">${names[currentEvent]}! <span class="event-timer">${fmtTime(left)}</span></div>`;}
 
@@ -455,7 +506,8 @@ const ACHIEVEMENTS=[
 {id:'stockDiv',name:'Dividendenkönig',icon:'💸',tip:'Halte 100 Aktien insgesamt',check:()=>stockState.reduce((a,s)=>a+s.shares,0)>=100},
 {id:'stockCrash',name:'Crash-Überleber',icon:'📉',tip:'Überlebe einen Börsencrash',check:()=>stats_marketCrashes>=1},
 {id:'event1',name:'Glückspilz',icon:'🍀',tip:'Erstes Event',check:()=>stats_eventsSeen>=1},
-{id:'boost1',name:'Turbo!',icon:'🚀',tip:'Erster Boost',check:()=>stats_boostsUsed>=1},
+{id:'ad1',name:'Werbung geschaut',icon:'📺',tip:'Erste Werbung geschaut',check:()=>stats_boostsUsed>=1},
+{id:'ad10',name:'Dauerwerbesender',icon:'📡',tip:'10 Boosts verwendet',check:()=>stats_boostsUsed>=10},
 ];
 function checkAchievements(){ACHIEVEMENTS.forEach(a=>{if(!achievementsUnlocked.has(a.id)&&a.check()){achievementsUnlocked.add(a.id);showFloat('🏆 '+a.name);}});}
 function renderAchievements(){document.getElementById('achTotal').textContent=ACHIEVEMENTS.length;document.getElementById('achCount').textContent=achievementsUnlocked.size;document.getElementById('achGrid').innerHTML=ACHIEVEMENTS.map(a=>`<div class="ach${achievementsUnlocked.has(a.id)?' done':''}"><div class="ach-icon">${achievementsUnlocked.has(a.id)?a.icon:'🔒'}</div><div class="ach-name">${achievementsUnlocked.has(a.id)?a.name:'???'}</div><div class="ach-tip">${a.tip}</div></div>`).join('');}
@@ -467,11 +519,11 @@ function renderPrestige(){let pg=getPrestigeGems(),pm=1+(gems+pg)*0.1;document.g
 
 // ===== RENDER =====
 function renderUpgrades(container,click){let list=click?CLICK_UPGRADES:AUTO_UPGRADES;let fn=click?'buyClick':'buyAuto';document.getElementById(container).innerHTML=list.map((u,i)=>{let c=cost(u),can=gold>=c;let desc=click?`+${fmt(u.power)} Klick`:`+${fmt(u.gps)} Gold/s`;return `<div class="upgrade"><div class="upgrade-info"><div class="upgrade-name">${u.name} (${u.count})</div><div class="upgrade-desc">${desc}</div></div><button class="upgrade-btn${can?'':' cant'}" onclick="${fn}(${i})">${fmt(c)} 🪙</button></div>`;}).join('');}
-function renderAll(){renderUpgrades('clickUpgrades',true);renderUpgrades('autoUpgrades',false);renderUpgrades('clickUpgrades2',true);renderUpgrades('autoUpgrades2',false);}
+function renderAll(){renderUpgrades('clickUpgrades',true);renderUpgrades('autoUpgrades',false);renderUpgrades('clickUpgrades2',true);renderUpgrades('autoUpgrades2',false);renderAds();}
 function update(){document.getElementById('gold').textContent=fmt(gold)+' Gold';let gpsD=gps*prestigeMultiplier*getAutoMultiplier();document.getElementById('perSec').textContent=fmt(gpsD)+' Gold/s';updateBoost();updateEvent();}
 
 // ===== GAME LOOP =====
-setInterval(()=>{if(gps>0){let m=prestigeMultiplier*getAutoMultiplier();let a=gps*m/10;gold+=a;totalGold+=a;totalGoldAllTime+=a;}updateJobs();update();},100);
+setInterval(()=>{if(gps>0){let m=prestigeMultiplier*getAutoMultiplier();let a=gps*m/10;gold+=a;totalGold+=a;totalGoldAllTime+=a;}updateJobs();update();if(document.getElementById('tab-ads').classList.contains('active'))renderAds();},100);
 setInterval(()=>{updateStockPrices();payDividends();if(document.getElementById('tab-stocks').classList.contains('active'))renderStocks();},3000);
 setInterval(()=>renderAll(),500);
 setInterval(()=>{checkAchievements();checkEasterEggs();},1000);
@@ -488,8 +540,133 @@ function calcOffline(){let now=Date.now(),elapsed=(now-lastSave)/1000;if(elapsed
 function showOffline(earned,elapsed){const o=document.createElement('div');o.className='offline-popup';o.innerHTML=`<h3>🌙 Willkommen zurück!</h3><p>Während du weg warst (${fmtTime(elapsed)}):</p><p style="font-size:1.2rem;color:#ffd700;margin:6px 0">+${fmt(earned)} Gold</p><button onclick="this.parentElement.remove()">Nice! 👍</button>`;document.body.appendChild(o);}
 
 // ===== SAVE/LOAD =====
-function save(){localStorage.setItem('bergwerk4',JSON.stringify({gold,totalGold,totalGoldAllTime,gems,prestigeMultiplier,clickPower,clickMultiplier,easter1M,easter1B,clickCounts:CLICK_UPGRADES.map(u=>u.count),autoCounts:AUTO_UPGRADES.map(u=>u.count),gemCounts:GEM_UPGRADES.map(u=>u.count),achievements:[...achievementsUnlocked],totalClicks,totalUpgradesBought,stats_eventsSeen,stats_boostsUsed,stats_jobsDone,stats_stocksTraded,stats_marketCrashes,jobCounts:JOBS.map(j=>j.count),stockShares:stockState.map(s=>s.shares),stockAvgBuy:stockState.map(s=>s.avgBuy),lastSave:Date.now()}));}
-function load(){const d=localStorage.getItem('bergwerk4');if(!d){initStocks();return;}const s=JSON.parse(d);gold=s.gold||0;totalGold=s.totalGold||0;totalGoldAllTime=s.totalGoldAllTime||0;gems=s.gems||0;prestigeMultiplier=s.prestigeMultiplier||1;clickPower=s.clickPower||1;clickMultiplier=s.clickMultiplier||1;easter1M=s.easter1M||false;easter1B=s.easter1B||false;totalClicks=s.totalClicks||0;totalUpgradesBought=s.totalUpgradesBought||0;stats_eventsSeen=s.stats_eventsSeen||0;stats_boostsUsed=s.stats_boostsUsed||0;stats_jobsDone=s.stats_jobsDone||0;stats_stocksTraded=s.stats_stocksTraded||0;stats_marketCrashes=s.stats_marketCrashes||0;if(s.clickCounts)s.clickCounts.forEach((c,i)=>{CLICK_UPGRADES[i].count=c;});if(s.autoCounts)s.autoCounts.forEach((c,i)=>{AUTO_UPGRADES[i].count=c;});if(s.gemCounts)s.gemCounts.forEach((c,i)=>{GEM_UPGRADES[i].count=c;});if(s.achievements)achievementsUnlocked=new Set(s.achievements);if(s.jobCounts)s.jobCounts.forEach((c,i)=>{JOBS[i].count=c;});lastSave=s.lastSave||Date.now();initStocks();if(s.stockShares)s.stockShares.forEach((c,i)=>{stockState[i].shares=c;});if(s.stockAvgBuy)s.stockAvgBuy.forEach((c,i)=>{stockState[i].avgBuy=c;});applyGemUpgrades();calcOffline();}
+// ===== AD SYSTEM =====
+const AD_OFFERS=[
+{id:'goldBoost',name:'💰 Gold-Rush',desc:'2x Gold pro Sekunde für 60 Sekunden',duration:60,reward:'gps_boost',cooldown:300,icon:'💰'},
+{id:'clickBoost',name:'👆 Klick-Sturm',desc:'3x Klick-Power für 60 Sekunden',duration:60,reward:'click_boost',cooldown:300,icon:'👆'},
+{id:'offlineChest',name:'🎁 Offline-Truhe',desc:'Bekomme 30 Minuten Offline-Gold sofort',duration:0,reward:'offline_chest',cooldown:600,icon:'🎁'},
+{id:'jobInstant',name:'⚡ Blitz-Schicht',desc:'Nächster Job ist sofort fertig',duration:0,reward:'job_instant',cooldown:300,icon:'⚡'},
+{id:'stockTip',name:'📈 Insider-Tipp',desc:'Alle Aktien steigen für 45 Sekunden',duration:45,reward:'stock_boost',cooldown:600,icon:'📈'},
+];
+let adCooldowns={}; // {adId: timestamp_when_available_again}
+let activeAdBoost=null; // {type, end}
+let adOverlayActive=false;
+const FAKE_ADS=[
+ {title:'⛏️ Bergwerk Express',text:'Der neue Bergbau-Simulator! Baue dein Imperium!',brand:'GESPIELT WIRD MIT BEGEISTERUNG'},
+  {title:'🐉 Dragon Mining Co.',text:'Sammle Drachen, mine Erze, werde reich!',brand:'DRAGON STEEL GAMES'},
+  {title:'🛒 Goldwagen.de',text:'Dein Online-Shop für Bergbau-Ausrüstung!',brand:'GOLDWAGEN — ALLES FÜR DEN BERGAMANN'},
+  {title:'🕳️ Void Insurance',text:'Schütze dein Portfolio vor Crashs! (Nicht wirklich)',brand:'VOID INSURANCE — WIR SIND HINTER DIR'},
+];
+
+function renderAds(){
+  const el=document.getElementById('adList');
+  let now=Date.now();
+  let activeHTML='';
+  if(activeAdBoost){
+    let left=Math.max(0,(activeAdBoost.end-now)/1000);
+    activeHTML=`<div class="ad-box active-boost"><div class="ad-title"><span class="ad-name">🔥 Aktiver Boost!</span><span class="ad-reward">${Math.ceil(left)}s</span></div><div class="ad-progress"><div class="ad-progress-fill" style="width:${(left/(activeAdBoost.duration||60)*100).toFixed(0)}%"></div></div></div>`;
+  }
+  el.innerHTML=activeHTML+AD_OFFERS.map(offer=>{
+    let cd=adCooldowns[offer.id]||0;
+    let cdLeft=Math.max(0,(cd-now)/1000);
+    let canWatch=cdLeft<=0&&!adOverlayActive;
+    let btnClass=canWatch?'watch':(cdLeft>0?'cooldown':'running');
+    let btnText=canWatch?'📺 Werbung ansehen':(cdLeft>0?`⏳ ${fmtTime(Math.ceil(cdLeft))}`:'⏳ Läuft...');
+    return `<div class="ad-box">
+      <div class="ad-title"><span class="ad-name">${offer.icon} ${offer.name}</span></span></div>
+      <div class="ad-desc">${offer.desc}</div>
+      <button class="ad-btn ${btnClass}" onclick="watchAd('${offer.id}')" ${canWatch?'':'disabled'}>${btnText}</button>
+    </div>`;
+  }).join('');
+}
+
+function watchAd(id){
+  if(adOverlayActive)return;
+  let offer=AD_OFFERS.find(o=>o.id===id);
+  if(!offer)return;
+  let now=Date.now();
+  if(adCooldowns[id]&&adCooldowns[id]>now)return;
+  adOverlayActive=true;
+  // Fake ad anzeigen
+  let fakeAd=FAKE_ADS[Math.floor(Math.random()*FAKE_ADS.length)];
+  let overlay=document.createElement('div');
+  overlay.className='ad-overlay';
+  overlay.id='adOverlay';
+  let adDuration=5; // 5 Sekunden Fake-Werbung
+  let countdown=adDuration;
+  overlay.innerHTML=`
+    <h2>📺 Werbung</h2>
+    <div class="ad-fake-ad">
+      <h3>${fakeAd.title}</h3>
+      <p>${fakeAd.text}</p>
+      <div class="ad-brand">${fakeAd.brand}</div>
+    </div>
+    <div class="ad-countdown" id="adCountdown">${countdown}</div>
+    <button class="ad-skip" id="adSkip" onclick="finishAd('${id}')">✅ Belohnung abholen</button>
+    <p style="font-size:.65rem;color:#555;margin-top:10px">Hier kommt später echte Werbung hin</p>
+  `;
+  document.body.appendChild(overlay);
+  let timer=setInterval(()=>{
+    countdown--;
+    let cdEl=document.getElementById('adCountdown');
+    if(cdEl)cdEl.textContent=countdown;
+    if(countdown<=2){
+      let skip=document.getElementById('adSkip');
+      if(skip)skip.classList.add('visible');
+    }
+    if(countdown<=0){
+      clearInterval(timer);
+      finishAd(id);
+    }
+  },1000);
+}
+
+function finishAd(id){
+  let overlay=document.getElementById('adOverlay');
+  if(overlay)overlay.remove();
+  adOverlayActive=false;
+  let offer=AD_OFFERS.find(o=>o.id===id);
+  if(!offer)return;
+  // Cooldown setzen
+  adCooldowns[id]=Date.now()+offer.cooldown*1000;
+  // Belohnung geben
+  switch(offer.reward){
+    case 'gps_boost':
+      activeAdBoost={type:'gps',end:Date.now()+offer.duration*1000,duration:offer.duration};
+      showFloat('2x Gold/s!');
+      break;
+    case 'click_boost':
+      activeAdBoost={type:'click',end:Date.now()+offer.duration*1000,duration:offer.duration};
+      showFloat('3x Klick!');
+      break;
+    case 'offline_chest':
+      let offlineGold=Math.floor(gps*1800*0.5*prestigeMultiplier); // 30min * 50%
+      if(offlineGold<1)offlineGold=Math.floor(totalGoldAllTime*0.01);
+      gold+=offlineGold;totalGold+=offlineGold;totalGoldAllTime+=offlineGold;
+      showFloat('+'+fmt(offlineGold)+' 🎁');
+      break;
+    case 'job_instant':
+      // Mark next job start as instant
+      window._instantJob=true;
+      showFloat('⚡ Blitz-Schicht bereit!');
+      break;
+    case 'stock_boost':
+      marketEvent='boom';
+      marketEventEnd=Date.now()+offer.duration*1000;
+      showFloat('📈 Aktien steigen!');
+      break;
+  }
+  stats_boostsUsed++;
+  update();renderAds();
+}
+
+function applyAdBoost(){
+  if(!activeAdBoost)return;
+  if(Date.now()>activeAdBoost.end){activeAdBoost=null;return;}
+}
+
+function save(){localStorage.setItem('bergwerk4',JSON.stringify({gold,totalGold,totalGoldAllTime,gems,prestigeMultiplier,clickPower,clickMultiplier,easter1M,easter1B,clickCounts:CLICK_UPGRADES.map(u=>u.count),autoCounts:AUTO_UPGRADES.map(u=>u.count),gemCounts:GEM_UPGRADES.map(u=>u.count),achievements:[...achievementsUnlocked],totalClicks,totalUpgradesBought,stats_eventsSeen,stats_boostsUsed,stats_jobsDone,stats_stocksTraded,stats_marketCrashes,jobCounts:JOBS.map(j=>j.count),stockShares:stockState.map(s=>s.shares),stockAvgBuy:stockState.map(s=>s.avgBuy),adCooldowns,activeAdBoost,lastSave:Date.now()}));}
+function load(){const d=localStorage.getItem('bergwerk4');if(!d){initStocks();return;}const s=JSON.parse(d);gold=s.gold||0;totalGold=s.totalGold||0;totalGoldAllTime=s.totalGoldAllTime||0;gems=s.gems||0;prestigeMultiplier=s.prestigeMultiplier||1;clickPower=s.clickPower||1;clickMultiplier=s.clickMultiplier||1;easter1M=s.easter1M||false;easter1B=s.easter1B||false;totalClicks=s.totalClicks||0;totalUpgradesBought=s.totalUpgradesBought||0;stats_eventsSeen=s.stats_eventsSeen||0;stats_boostsUsed=s.stats_boostsUsed||0;stats_jobsDone=s.stats_jobsDone||0;stats_stocksTraded=s.stats_stocksTraded||0;stats_marketCrashes=s.stats_marketCrashes||0;if(s.adCooldowns)adCooldowns=s.adCooldowns;if(s.activeAdBoost&&s.activeAdBoost.end>Date.now())activeAdBoost=s.activeAdBoost;if(s.clickCounts)s.clickCounts.forEach((c,i)=>{CLICK_UPGRADES[i].count=c;});if(s.autoCounts)s.autoCounts.forEach((c,i)=>{AUTO_UPGRADES[i].count=c;});if(s.gemCounts)s.gemCounts.forEach((c,i)=>{GEM_UPGRADES[i].count=c;});if(s.achievements)achievementsUnlocked=new Set(s.achievements);if(s.jobCounts)s.jobCounts.forEach((c,i)=>{JOBS[i].count=c;});lastSave=s.lastSave||Date.now();initStocks();if(s.stockShares)s.stockShares.forEach((c,i)=>{stockState[i].shares=c;});if(s.stockAvgBuy)s.stockAvgBuy.forEach((c,i)=>{stockState[i].avgBuy=c;});applyGemUpgrades();calcOffline();}
 window.onbeforeunload=save;
 setInterval(save,15000);
 load();update();renderAll();
