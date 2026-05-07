@@ -360,7 +360,7 @@ function renderJobs(){
     if(cdLeft>0){
       return `<div class="job"><div class="job-top"><span class="job-name">${job.name}</span><span class="job-pay">${fmt(reward)} 🪙</span></div><div class="job-desc">${job.desc}</div><button class="job-btn" disabled>⏳ Abkühlung (${fmtTime(cdLeft)})</button></div>`;
     }
-    return `<div class="job"><div class="job-top"><span class="job-name">${job.name}</span><span class="job-pay">${fmt(reward)} 🪙</span></div><div class="job-desc">${job.desc}</button><button class="job-btn" onclick="startJob('${job.id}')">🔨 Schicht starten (${fmtTime(job.duration)})</button></div>`;
+    return `<div class="job"><div class="job-top"><span class="job-name">${job.name}</span><span class="job-pay">${fmt(reward)} 🪙</span></div><div class="job-desc">${job.desc}</div><button class="job-btn" onclick="startJob('${job.id}')">🔨 Schicht starten (${fmtTime(job.duration)})</button></div>`;
   }).join('');
 }
 
