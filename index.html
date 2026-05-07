@@ -523,7 +523,7 @@ function renderAll(){renderUpgrades('clickUpgrades',true);renderUpgrades('autoUp
 function update(){document.getElementById('gold').textContent=fmt(gold)+' Gold';let gpsD=gps*prestigeMultiplier*getAutoMultiplier();document.getElementById('perSec').textContent=fmt(gpsD)+' Gold/s';updateBoost();updateEvent();}
 
 // ===== GAME LOOP =====
-setInterval(()=>{if(gps>0){let m=prestigeMultiplier*getAutoMultiplier();let a=gps*m/10;gold+=a;totalGold+=a;totalGoldAllTime+=a;}updateJobs();update();if(document.getElementById('tab-ads').classList.contains('active'))renderAds();},100);
+setInterval(()=>{if(gps>0){let m=prestigeMultiplier*getAutoMultiplier();let a=gps*m/10;gold+=a;totalGold+=a;totalGoldAllTime+=a;}updateJobs();update();if(document.getElementById('tab-ads').classList.contains('active'))renderAds();if(document.getElementById('tab-jobs').classList.contains('active'))renderJobs();},100);
 setInterval(()=>{updateStockPrices();payDividends();if(document.getElementById('tab-stocks').classList.contains('active'))renderStocks();},3000);
 setInterval(()=>renderAll(),500);
 setInterval(()=>{checkAchievements();checkEasterEggs();},1000);
