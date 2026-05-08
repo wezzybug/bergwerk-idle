@@ -153,6 +153,7 @@ h2{color:#ffd700;font-size:1rem;margin:10px 0 6px;border-bottom:1px solid #333;p
   <div class="tab" onclick="switchTab('ach')">🏆</div>
   <div class="tab" onclick="switchTab('ads')">📺</div>
   <div class="tab" onclick="switchTab('prestige')">✨</div>
+  <div class="tab" onclick="switchTab('lb')">🏆 Rang</div>
 </div>
 
 <div class="panel active" id="tab-mine">
@@ -198,6 +199,17 @@ h2{color:#ffd700;font-size:1rem;margin:10px 0 6px;border-bottom:1px solid #333;p
     <button class="prestige-btn cant" id="prestigeBtn" onclick="doPrestige()">✨ Prestige (min. 10M)</button>
   </div>
   <h2>💎 Kristall-Upgrades</h2><div id="gemUpgrades"></div>
+</div>
+
+<div class="panel" id="tab-lb">
+  <h2>🏆 Rangliste</h2>
+  <p style="color:#888;font-size:.75rem;margin-bottom:8px">Top Bergwerker – live vom Server</p>
+  <div id="lbList"><div style="text-align:center;color:#666;padding:20px">Lade Rangliste...</div></div>
+  <div style="display:flex;gap:6px;justify-content:center;margin-top:10px">
+    <button class="upgrade-btn" onclick="loadLeaderboard('gold')">💰 Gold</button>
+    <button class="upgrade-btn" onclick="loadLeaderboard('prestige')">✨ Prestige</button>
+    <button class="upgrade-btn" onclick="loadLeaderboard('clicks')">⛏️ Klicks</button>
+  </div>
 </div>
 
 <div id="consentBar" class="consent-bar" style="display:none">
@@ -370,6 +382,11 @@ const SERVER={
         if(data.stocks&&data.stocks.length>0){
           data.stocks.forEach(s=>{if(stockState[s.stock_index]){stockState[s.stock_index].shares=s.shares;stockState[s.stock_index].avgBuy=s.avg_buy;}});
         }
+        // Achievements laden
+        if(data.achievements&&data.achievements.length>0){
+          data.achievements.forEach(a=>achievementsUnlocked.add(a.achievement_id));
+          updateAchievements();
+        }
         applyGemUpgrades();
         update();
         renderAll();
@@ -399,7 +416,8 @@ const SERVER={
         ...GEM_UPGRADES.map((u,i)=>({type:'gem',index:i,count:u.count}))
       ],
       jobs:JOBS.map((j,i)=>({index:i,count:j.count})),
-      stocks:stockState.map((s,i)=>({index:i,shares:s.shares,avg_buy:s.avgBuy}))
+      stocks:stockState.map((s,i)=>({index:i,shares:s.shares,avg_buy:s.avgBuy})),
+      achievements:[...achievementsUnlocked]
     };
     const res=await fetch(this.url+'/sync',{
       method:'POST',
@@ -418,6 +436,29 @@ const SERVER={
     return res.ok?await res.json():null;
   }
 };
+
+// Leaderboard laden und anzeigen
+async function loadLeaderboard(type='gold'){
+  const el=document.getElementById('lbList');
+  if(!el)return;
+  el.innerHTML='<div style="text-align:center;color:#888;padding:20px">Lade...</div>';
+  const data=await SERVER.leaderboard(type);
+  if(!data||!data.leaderboard||data.leaderboard.length===0){
+    el.innerHTML='<div style="text-align:center;color:#888;padding:20px">Noch keine Einträge</div>';return;
+  }
+  const labels={gold:'💰 Gesamt-Gold',prestige:'✨ Prestige',clicks:'⛏️ Klicks'};
+  const fmt={gold:v=>v>=1e9?(v/1e9).toFixed(1)+'B':v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(1)+'K':Math.floor(v).toLocaleString('de'),prestige:v=>'x'+v.toFixed(1),clicks:v=>v.toLocaleString('de')};
+  const valKey={gold:'total_gold',prestige:'prestige',clicks:'total_clicks'};
+  let html='<div style="font-size:.85rem;color:#ffd700;text-align:center;margin-bottom:8px">'+labels[type]+'</div>';
+  data.leaderboard.forEach((p,i)=>{
+    const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+    const bg=i===0?'background:linear-gradient(90deg,#1a1a2e,#2a1f0e)':i<3?'background:#16213e':'';
+    html+=<div class="upgrade" style="${bg}"><div class="upgrade-info"><div class="upgrade-name">${medal} #${p.rank} ${p.user_id}</div></div><div class="upgrade-btn" style="cursor:default;border-color:#ffd700;color:#ffd700;background:#0f3460">${fmt[type](p[valKey[type]])}</div></div>;
+  });
+  el.innerHTML=html;
+}
+// Leaderboard alle 60s aktualisieren wenn Tab sichtbar
+setInterval(()=>{if(document.getElementById('tab-lb')?.classList.contains('active'))loadLeaderboard();},60000);
 
 let gold=0,totalGold=0,totalGoldAllTime=0,gps=0,clickPower=1,clickMultiplier=1;
 let lastGoldTick=Date.now(); // Für zeitbasierte Gold-Berechnung
