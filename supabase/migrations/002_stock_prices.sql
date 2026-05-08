@@ -1,5 +1,5 @@
 -- Bergwerk Idle — Stock Prices Initialisierung
--- Füge diesen Code im Supabase Dashboard SQL Editor aus:
+-- Füge diesen Code im Supabase Dashboard SQL Editor aus (https://supabase.com/dashboard/project/xmiqereagqyufyiodsmj/editor)
 
 -- Table erstellen (falls nicht existiert)
 CREATE TABLE IF NOT EXISTS public.stock_prices (
