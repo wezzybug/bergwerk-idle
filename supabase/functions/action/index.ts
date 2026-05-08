@@ -408,8 +408,35 @@ Deno.serve(async (req: Request) => {
           });
         }
 
-        // TODO: Aktienpreise laden (braucht stock_prices Tabelle)
-        response = { success: false, error: "Stock buy not implemented yet" };
+        const { data: stockPrice } = await supabase.from("stock_prices").select("current_price").eq("stock_index", index).single();
+        if (!stockPrice) {
+          return new Response(JSON.stringify({ error: "Stock not found" }), {
+            status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const price = stockPrice.current_price;
+        const feeRate = 0.05;
+        const total = price * qty * (1 + feeRate);
+
+        if (gold < total) {
+          return new Response(JSON.stringify({ success: false, error: "Not enough gold" }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const { data: holding } = await supabase.from("stock_holdings").select("shares, avg_buy_price").eq("user_id", userId).eq("stock_index", index).single();
+        const oldShares = holding?.shares || 0;
+        const oldAvg = holding?.avg_buy_price || 0;
+        const newShares = oldShares + qty;
+        const newAvg = oldShares > 0 ? ((oldShares * oldAvg) + (qty * price)) / newShares : price;
+
+        await supabase.from("stock_holdings").upsert({user_id: userId, stock_index: index, shares: newShares, avg_buy_price: newAvg}, {onConflict: "user_id,stock_index"});
+        await supabase.from("stock_trades").insert({user_id: userId, stock_index: index, type: "buy", quantity: qty, price: price, total: total});
+        const newGold = gold - total;
+        await supabase.from("game_state").upsert({user_id: userId, gold: newGold, total_gold: (state?.total_gold || 0) - total, total_gold_all_time: totalGoldAllTime, last_save: timestamp.toISOString()}, {onConflict: "user_id"});
+
+        response = {success: true, action: "buy_stock", index: index, qty: qty, price: price, total: total, gold: newGold, new_shares: newShares, new_avg_buy: newAvg};
         break;
       }
 
@@ -422,7 +449,36 @@ Deno.serve(async (req: Request) => {
           });
         }
 
-        response = { success: false, error: "Stock sell not implemented yet" };
+        const { data: stockPrice } = await supabase.from("stock_prices").select("current_price").eq("stock_index", index).single();
+        if (!stockPrice) {
+          return new Response(JSON.stringify({ error: "Stock not found" }), {
+            status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const price = stockPrice.current_price;
+        const feeRate = 0.05;
+
+        const { data: holding } = await supabase.from("stock_holdings").select("shares, avg_buy_price").eq("user_id", userId).eq("stock_index", index).single();
+        const shares = holding?.shares || 0;
+
+        if (shares < qty) {
+          return new Response(JSON.stringify({ success: false, error: "Not enough shares" }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const revenue = price * qty * (1 - feeRate);
+        const newShares = shares - qty;
+        const newAvg = newShares > 0 ? holding?.avg_buy_price || 0 : 0;
+
+        await supabase.from("stock_holdings").upsert({user_id: userId, stock_index: index, shares: newShares, avg_buy_price: newAvg}, {onConflict: "user_id,stock_index"});
+        await supabase.from("stock_trades").insert({user_id: userId, stock_index: index, type: "sell", quantity: qty, price: price, total: revenue});
+
+        const newGold = gold + revenue;
+        await supabase.from("game_state").upsert({user_id: userId, gold: newGold, total_gold: (state?.total_gold || 0) + revenue, total_gold_all_time: totalGoldAllTime, last_save: timestamp.toISOString()}, {onConflict: "user_id"});
+
+        response = {success: true, action: "sell_stock", index: index, qty: qty, price: price, revenue: revenue, gold: newGold, new_shares: newShares, new_avg_buy: newAvg};
         break;
       }
 

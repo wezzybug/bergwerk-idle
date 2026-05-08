@@ -61,11 +61,13 @@ Deno.serve(async (req: Request) => {
       const { data: adBoosts } = await supabase.from("ad_watches").select("ad_type, expires_at").eq("user_id", userId).gt("expires_at", new Date().toISOString());
       const { data: jobs } = await supabase.from("jobs").select("job_index, count, payout").eq("user_id", userId);
       const { data: stocks } = await supabase.from("stock_holdings").select("stock_index, shares, avg_buy_price").eq("user_id", userId);
+      const { data: stockPrices } = await supabase.from("stock_prices").select("stock_index, current_price, prev_price, trend").order("stock_index");
 
       return new Response(JSON.stringify({
         success: true, user_id: userId,
         state: state || {}, upgrades: upgrades || [], achievements: achievements || [],
         ad_boosts: adBoosts || [], jobs: jobs || [], stocks: stocks || [],
+        stock_prices: stockPrices || [],
         shadow_banned: false, server_time: new Date().toISOString(),
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
