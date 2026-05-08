@@ -474,7 +474,7 @@ async function loadLeaderboard(type='gold'){
   data.leaderboard.forEach((p,i)=>{
     const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
     const bg=i===0?'background:linear-gradient(90deg,#1a1a2e,#2a1f0e)':i<3?'background:#16213e':'';
-    html+=<div class="upgrade" style="${bg}"><div class="upgrade-info"><div class="upgrade-name">${medal} #${p.rank} ${p.user_id}</div></div><div class="upgrade-btn" style="cursor:default;border-color:#ffd700;color:#ffd700;background:#0f3460">${fmt[type](p[valKey[type]])}</div></div>;
+    html+=`<div class="upgrade" style="${bg}"><div class="upgrade-info"><div class="upgrade-name">${medal} #${p.rank} ${p.user_id}</div></div><div class="upgrade-btn" style="cursor:default;border-color:#ffd700;color:#ffd700;background:#0f3460">${fmt[type](p[valKey[type]])}</div></div>`;
   });
   el.innerHTML=html;
 }
