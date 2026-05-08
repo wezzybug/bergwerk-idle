@@ -444,6 +444,13 @@ const SERVER={
       headers:{'apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhtaXF0ZXJlZ3F5dWZ5aW9kc21qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyOTY4MjAsImV4cCI6MjA2MTg3MjgyMH0.KFn0VjLQOZ3b0J8pXfC7s5n4Yr2vH6m9qR3wL5kJXcI'}
     });
     return res.ok?await res.json():null;
+  },
+
+  // Action: Server-authoritativ alle Game-Aktionen
+  async action(action,data){
+    const res=await fetch(this.url+'/action',{method:'POST',headers:{'Content-Type':'application/json','x-device-id':this.deviceId,'apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhtaXF0ZXJlZ3F5dWZ5aW9kc21qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyOTY4MjAsImV4cCI6MjA2MTg3MjgyMH0.KFn0VjLQOZ3b0J8pXfC7s5n4Yr2vH6m9qR3wL5kJXcI'},body:JSON.stringify({action,data})});
+    if(res.ok){const r=await res.json();return r;}
+    else{console.warn('[Server] Action failed:',action,res.status);return null;}
   }
 };
 
@@ -597,19 +604,18 @@ function switchTab(t){
 }
 
 function doMine(){
-  let base=clickPower*clickMultiplier*prestigeMultiplier;
-  let boost=activeBoost==='click'?2:1;
-  if(activeAdBoost&&activeAdBoost.type==='click')boost*=3;
-  applyAdBoost();
-  let amt=base*boost;
-  gold+=amt;totalGold+=amt;totalGoldAllTime+=amt;totalClicks++;
-  if(totalClicks%10===0)ANALYTICS.trackMine(amt); // Jeden 10. Klick tracken
-  showFloat('+'+fmt(amt));
-  document.getElementById('mineBtn').classList.add('shake');
-  setTimeout(()=>document.getElementById('mineBtn').classList.remove('shake'),300);
-  if(!activeBoost&&Math.random()<0.003+GEM_UPGRADES[3].count*0.01)dropBoost();
-  if(!currentEvent&&Math.random()<0.0005+GEM_UPGRADES[3].count*0.005)triggerEvent();
-  update();
+  SERVER.action('mine').then(r=>{
+    if(r&&r.success){
+      gold=r.gold;totalGold+=r.reward;totalGoldAllTime+=r.reward;totalClicks=r.total_clicks||0;
+      ANALYTICS.trackMine(r.reward);
+      showFloat('+'+fmt(r.reward));
+      document.getElementById('mineBtn').classList.add('shake');
+      setTimeout(()=>document.getElementById('mineBtn').classList.remove('shake'),300);
+      if(!activeBoost&&Math.random()<0.003+GEM_UPGRADES[3].count*0.01)dropBoost();
+      if(!currentEvent&&Math.random()<0.0005+GEM_UPGRADES[3].count*0.005)triggerEvent();
+      update();
+    }
+  });
 }
 
 function showFloat(txt){
@@ -620,8 +626,34 @@ function showFloat(txt){
 }
 
 // ===== UPGRADES =====
-function buyClick(i,qty){let u=CLICK_UPGRADES[i],b=0;for(let q=0;q<(qty||1);q++){let c=cost(u);if(gold<c)break;gold-=c;u.count++;b++;clickPower+=u.power;}if(b){totalUpgradesBought+=b;ANALYTICS.trackUpgrade(u.id,u.count,cost(u));update();renderAll();}}
-function buyAuto(i,qty){let u=AUTO_UPGRADES[i],b=0;for(let q=0;q<(qty||1);q++){let c=cost(u);if(gold<c)break;gold-=c;u.count++;b++;}if(b){totalUpgradesBought+=b;ANALYTICS.trackUpgrade(u.id,u.count,cost(u));recalcGPS();update();renderAll();}}
+function buyClick(i,qty){
+  for(let q=0;q<(qty||1);q++){
+    SERVER.action('buy_click_upgrade',{index:i}).then(r=>{
+      if(r&&r.success){
+        gold=r.gold;
+        CLICK_UPGRADES[i].count=r.upgrade_count;
+        clickPower=r.click_power;
+        totalUpgradesBought++;
+        ANALYTICS.trackUpgrade(CLICK_UPGRADES[i].id,CLICK_UPGRADES[i].count,0);
+        update();renderAll();
+      }
+    });
+  }
+}
+function buyAuto(i,qty){
+  for(let q=0;q<(qty||1);q++){
+    SERVER.action('buy_auto_upgrade',{index:i}).then(r=>{
+      if(r&&r.success){
+        gold=r.gold;
+        AUTO_UPGRADES[i].count=r.upgrade_count;
+        totalUpgradesBought++;
+        ANALYTICS.trackUpgrade(AUTO_UPGRADES[i].id,AUTO_UPGRADES[i].count,0);
+        recalcGPS();
+        update();renderAll();
+      }
+    });
+  }
+}
 function buyGem(i){let u=GEM_UPGRADES[i],c=cost(u);if(gems>=c&&(!u.max||u.count<u.max)){gems-=c;u.count++;applyGemUpgrades();renderPrestige();}}
 function buyMaxClick(){CLICK_UPGRADES.forEach((_,i)=>buyClick(i,999));}
 function buyMaxAuto(){AUTO_UPGRADES.forEach((_,i)=>buyAuto(i,999));}
@@ -630,30 +662,27 @@ function applyGemUpgrades(){clickMultiplier=1+GEM_UPGRADES[0].count*0.5;recalcGP
 
 // ===== JOBS =====
 function startJob(id){
-  if(activeJobs[id])return;
-  if(jobCooldowns[id]&&Date.now()<jobCooldowns[id])return;
-  let job=JOBS.find(j=>j.id===id);
-  if(!job)return;
-  let dur=window._instantJob?0:job.duration*1000;
-  window._instantJob=false;
-  if(dur===0){
-    activeJobs[id]={start:Date.now(),duration:0,done:true};
-  } else {
-    activeJobs[id]={start:Date.now(),duration:dur,done:false};
-  }
-  renderJobs();
+  SERVER.action('start_job',{job_id:id}).then(r=>{
+    if(r&&r.success){
+      if(!activeJobs[id])activeJobs[id]={start:Date.now(),duration:r.duration,done:false};
+      renderJobs();
+    }
+  });
 }
 function claimJob(id){
-  let j=activeJobs[id];if(!j||!j.done)return;
-  let job=JOBS.find(jj=>jj.id===id);
-  let reward=job.multReward?Math.floor(job.reward*Math.max(1,1+Math.log10(Math.max(1,gps))*0.5)*prestigeMultiplier):job.reward;
-  gold+=reward;totalGold+=reward;totalGoldAllTime+=reward;job.count++;stats_jobsDone++;
-  ANALYTICS.trackJob(job.id,reward);
-  showFloat('+'+fmt(reward));
-  // Cooldown starten
-  jobCooldowns[id]=Date.now()+(job.cooldown||0)*1000;
-  delete activeJobs[id];
-  update();renderJobs();
+  SERVER.action('claim_job',{job_id:id}).then(r=>{
+    if(r&&r.success){
+      gold=r.gold;totalGold+=r.reward;totalGoldAllTime+=r.reward;
+      let job=JOBS.find(j=>j.id===id);
+      if(job)job.count++;
+      stats_jobsDone++;
+      ANALYTICS.trackJob(job.id,r.reward);
+      showFloat('+'+fmt(r.reward));
+      jobCooldowns[id]=Date.now()+(job.cooldown||0)*1000;
+      delete activeJobs[id];
+      update();renderJobs();
+    }
+  });
 }
 function updateJobs(){
   let now=Date.now();
@@ -792,7 +821,7 @@ function renderAchievements(){document.getElementById('achTotal').textContent=AC
 
 // ===== PRESTIGE =====
 function getPrestigeGems(){return Math.floor(totalGoldAllTime/1e7);}
-function doPrestige(){if(totalGoldAllTime<1e7)return;ANALYTICS.trackPrestige(getPrestigeGems(),totalGoldAllTime);gems+=getPrestigeGems();prestigeMultiplier=1+gems*0.1;gold=0;totalGold=0;totalGoldAllTime=0;gps=0;clickPower=1;clickMultiplier=1;totalClicks=0;totalUpgradesBought=0;activeBoost=null;boostEnd=0;currentEvent=null;eventEnd=0;easter1M=false;easter1B=false;CLICK_UPGRADES.forEach(u=>u.count=0);AUTO_UPGRADES.forEach(u=>u.count=0);activeJobs={};jobCooldowns={};marketEvent=null;marketEventEnd=0;stockState.forEach(s=>{s.shares=0;s.avgBuy=0;s.trend=0;});initStocks();applyGemUpgrades();update();renderAll();switchTab('prestige');spawnParticles();}
+function doPrestige(){SERVER.action('prestige').then(r=>{if(r&&r.success){gems=r.new_gems;prestigeMultiplier=r.new_prestige_multiplier;gold=0;totalGold=0;totalGoldAllTime=0;gps=0;clickPower=1;clickMultiplier=1;totalClicks=0;totalUpgradesBought=0;activeBoost=null;boostEnd=0;currentEvent=null;eventEnd=0;easter1M=false;easter1B=false;CLICK_UPGRADES.forEach(u=>u.count=0);AUTO_UPGRADES.forEach(u=>u.count=0);activeJobs={};jobCooldowns={};marketEvent=null;marketEventEnd=0;stockState.forEach(s=>{s.shares=0;s.avgBuy=0;s.trend=0;});initStocks();applyGemUpgrades();update();renderAll();switchTab('prestige');spawnParticles();ANALYTICS.trackPrestige(r.new_gems,0);}});}
 function renderPrestige(){let pg=getPrestigeGems(),pm=1+(gems+pg)*0.1;document.getElementById('prestigePreview').textContent='x'+pm.toFixed(1);document.getElementById('prestigeGems').textContent=pg;let btn=document.getElementById('prestigeBtn');btn.classList.toggle('cant',totalGoldAllTime<1e7);btn.textContent=totalGoldAllTime>=1e7?`✨ Prestige (+${pg} 💎)`:'✨ Prestige (min. 10M)';document.getElementById('gemUpgrades').innerHTML=GEM_UPGRADES.map((u,i)=>{let c=cost(u),can=gems>=c,atMax=u.max&&u.count>=u.max;return `<div class="upgrade"><div class="upgrade-info"><div class="upgrade-name">${u.name} (${u.count}${u.max?'/'+u.max:''})</div><div class="upgrade-desc">${u.desc}</div></div><button class="upgrade-btn${can&&!atMax?'':' cant'}" onclick="buyGem(${i})">${atMax?'MAX':fmt(c)+' 💎'}</button></div>`;}).join('');}
 
 // ===== RENDER =====
