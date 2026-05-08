@@ -436,7 +436,7 @@ Deno.serve(async (req: Request) => {
         const newGold = gold - total;
         await supabase.from("game_state").upsert({user_id: userId, gold: newGold, total_gold: (state?.total_gold || 0) - total, total_gold_all_time: totalGoldAllTime, last_save: timestamp.toISOString()}, {onConflict: "user_id"});
 
-        response = {success: true, action: "buy_stock", index: index, qty: qty, price: price, total: total, gold: newGold, new_shares: newShares, new_avg_buy: newAvg};
+        response = {success: true, action: "buy_stock", index: index, qty: qty, price: price, total: total, gold: newGold, shares: newShares, avg_buy_price: newAvg};
         break;
       }
 
@@ -478,7 +478,7 @@ Deno.serve(async (req: Request) => {
         const newGold = gold + revenue;
         await supabase.from("game_state").upsert({user_id: userId, gold: newGold, total_gold: (state?.total_gold || 0) + revenue, total_gold_all_time: totalGoldAllTime, last_save: timestamp.toISOString()}, {onConflict: "user_id"});
 
-        response = {success: true, action: "sell_stock", index: index, qty: qty, price: price, revenue: revenue, gold: newGold, new_shares: newShares, new_avg_buy: newAvg};
+        response = {success: true, action: "sell_stock", index: index, qty: qty, price: price, revenue: revenue, gold: newGold, shares: newShares, avg_buy_price: newAvg};
         break;
       }
 

@@ -382,6 +382,10 @@ const SERVER={
         if(data.stocks&&data.stocks.length>0){
           data.stocks.forEach(s=>{if(stockState[s.stock_index]){stockState[s.stock_index].shares=s.shares;stockState[s.stock_index].avgBuy=s.avg_buy;}});
         }
+        // Stock Prices vom Server laden
+        if(data.stock_prices&&data.stock_prices.length>0){
+          data.stock_prices.forEach(sp=>{if(stockState[sp.stock_index]){stockState[sp.stock_index].price=sp.current_price;stockState[sp.stock_index].prevPrice=sp.prev_price||sp.current_price;stockState[sp.stock_index].trend=sp.trend||0;}});
+        }
         // Achievements laden
         if(data.achievements&&data.achievements.length>0){
           data.achievements.forEach(a=>achievementsUnlocked.add(a.achievement_id));
@@ -715,22 +719,20 @@ function renderJobs(){
 }
 
 // ===== STOCKS =====
-function buyStock(i,qty){
-  let s=stockState[i],total=s.price*qty*(1+STOCK_FEE); // +5% Gebühr
-  if(gold<total)return;
-  let oldTotal=s.shares*s.avgBuy;
-  gold-=total;s.shares+=qty;
-  s.avgBuy=s.shares>0?(oldTotal+s.price*qty)/s.shares:0;
-  stats_stocksTraded++;ANALYTICS.trackStock('buy',s.id,qty,s.price);update();renderStocks();
+async function buyStock(i,qty){
+  if(!SERVER.deviceId){let s=stockState[i],total=s.price*qty*(1+STOCK_FEE);if(gold<total)return;let oldTotal=s.shares*s.avgBuy;gold-=total;s.shares+=qty;s.avgBuy=s.shares>0?(oldTotal+s.price*qty)/s.shares:0;stats_stocksTraded++;update();renderStocks();return;}
+  const r=await SERVER.action('buy_stock',{index:i,qty});
+  if(r&&r.success){gold=r.gold;if(r.shares!==undefined)stockState[i].shares=r.shares;if(r.avg_buy_price!==undefined)stockState[i].avgBuy=r.avg_buy_price;stats_stocksTraded++;ANALYTICS.trackStock('buy',stockState[i].id,qty,stockState[i].price);update();renderStocks();}
+  else if(r&&r.error){showFloat('❌ '+r.error);}
 }
-function sellStock(i,qty){
-  let s=stockState[i];if(s.shares<qty)return;
-  let revenue=s.price*qty*(1-STOCK_FEE); // -5% Gebühr
-  gold+=revenue;s.shares-=qty;
-  if(s.shares===0)s.avgBuy=0;
-  stats_stocksTraded++;ANALYTICS.trackStock('sell',s.id,qty,s.price);update();renderStocks();
+async function sellStock(i,qty){
+  if(stockState[i].shares<qty)return;
+  if(!SERVER.deviceId){let s=stockState[i];let revenue=s.price*qty*(1-STOCK_FEE);gold+=revenue;s.shares-=qty;if(s.shares===0)s.avgBuy=0;stats_stocksTraded++;update();renderStocks();return;}
+  const r=await SERVER.action('sell_stock',{index:i,qty});
+  if(r&&r.success){gold=r.gold;if(r.shares!==undefined)stockState[i].shares=r.shares;if(r.avg_buy_price!==undefined)stockState[i].avgBuy=r.avg_buy_price;stats_stocksTraded++;ANALYTICS.trackStock('sell',stockState[i].id,qty,stockState[i].price);update();renderStocks();}
+  else if(r&&r.error){showFloat('❌ '+r.error);}
 }
-function sellAllStock(i){let s=stockState[i];if(s.shares>0)sellStock(i,s.shares);}
+function sellAllStock(i){if(stockState[i].shares>0)sellStock(i,stockState[i].shares);}
 function renderStocks(){
   // Markt-Event Banner
   let eventHTML='';
