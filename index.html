@@ -353,36 +353,38 @@ const SERVER={
       if(!res.ok){console.warn('[Server] GET failed:',res.status);this.pending=false;return;}
       const data=await res.json();
       if(data.success&&data.state){
-        // Server-Daten: gold, gps, prestige etc. laden
-        if(data.state.gold>0)gold=data.state.gold;
-        if(data.state.total_gold>0)totalGold=data.state.total_gold;
-        if(data.state.total_gold_all_time>0)totalGoldAllTime=data.state.total_gold_all_time;
-        if(data.state.gems>0)gems=data.state.gems;
-        if(data.state.prestige_multiplier>1)prestigeMultiplier=data.state.prestige_multiplier;
-        if(data.state.click_power>1)clickPower=data.state.click_power;
-        if(data.state.click_multiplier>1)clickMultiplier=data.state.click_multiplier;
-        if(data.state.gps>0)gps=data.state.gps;
-        if(data.state.total_clicks>0)totalClicks=data.state.total_clicks;
-        if(data.state.total_upgrades_bought>0)totalUpgradesBought=data.state.total_upgrades_bought;
+        // ERSTER SYNC: Server-Daten laden (nur wenn Server mehr hat)
+        if(!this.lastSync){
+          if(data.state.gold>gold)gold=data.state.gold;
+          if(data.state.total_gold>totalGold)totalGold=data.state.total_gold;
+          if(data.state.total_gold_all_time>totalGoldAllTime)totalGoldAllTime=data.state.total_gold_all_time;
+          if(data.state.gems>gems)gems=data.state.gems;
+          if(data.state.prestige_multiplier>prestigeMultiplier)prestigeMultiplier=data.state.prestige_multiplier;
+          if(data.state.click_power>clickPower)clickPower=data.state.click_power;
+          if(data.state.click_multiplier>clickMultiplier)clickMultiplier=data.state.click_multiplier;
+          if(data.state.gps>gps)gps=data.state.gps;
+          if(data.state.total_clicks>totalClicks)totalClicks=data.state.total_clicks;
+          if(data.state.total_upgrades_bought>totalUpgradesBought)totalUpgradesBought=data.state.total_upgrades_bought;
+        }
         if(data.state.easter_1m)easter1M=true;
         if(data.state.easter_1b)easter1B=true;
-        // Upgrades laden
+        // Upgrades laden (immer – Server ist authoritativ)
         if(data.upgrades&&data.upgrades.length>0){
           data.upgrades.forEach(u=>{
             const lists={click:CLICK_UPGRADES,auto:AUTO_UPGRADES,gem:GEM_UPGRADES};
             const list=lists[u.upgrade_type];
-            if(list&&list[u.upgrade_index])list[u.upgrade_index].count=u.count;
+            if(list&&list[u.upgrade_index])list[u.upgrade_index].count=Math.max(list[u.upgrade_index].count,u.count);
           });
         }
         // Jobs laden
         if(data.jobs&&data.jobs.length>0){
-          data.jobs.forEach(j=>{if(JOBS[j.job_index])JOBS[j.job_index].count=j.count;});
+          data.jobs.forEach(j=>{if(JOBS[j.job_index])JOBS[j.job_index].count=Math.max(JOBS[j.job_index].count,j.count);});
         }
         // Stocks laden
         if(data.stocks&&data.stocks.length>0){
-          data.stocks.forEach(s=>{if(stockState[s.stock_index]){stockState[s.stock_index].shares=s.shares;stockState[s.stock_index].avgBuy=s.avg_buy;}});
+          data.stocks.forEach(s=>{if(stockState[s.stock_index]){stockState[s.stock_index].shares=Math.max(stockState[s.stock_index].shares,s.shares);stockState[s.stock_index].avgBuy=s.avg_buy||stockState[s.stock_index].avgBuy;}});
         }
-        // Stock Prices vom Server laden
+        // Stock Prices vom Server laden (immer – Server ist authoritativ)
         if(data.stock_prices&&data.stock_prices.length>0){
           data.stock_prices.forEach(sp=>{if(stockState[sp.stock_index]){stockState[sp.stock_index].price=sp.current_price;stockState[sp.stock_index].prevPrice=sp.prev_price||sp.current_price;stockState[sp.stock_index].trend=sp.trend||0;}});
         }
@@ -544,8 +546,7 @@ let marketEvent=null,marketEventEnd=0;
 
 function initStocks(){
   stockState=STOCKS.map(s=>{
-    let price=s.basePrice*(0.8+Math.random()*0.4);
-    return{...s,price,prevPrice:price,history:Array.from({length:20},()=>price*(0.9+Math.random()*0.2)),shares:0,avgBuy:0,trend:0};
+    return{...s,price:s.basePrice,prevPrice:s.basePrice,history:Array.from({length:20},()=>s.basePrice),shares:0,avgBuy:0,trend:0};
   });
 }
 function updateStockPrices(){
