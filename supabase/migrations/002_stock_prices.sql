@@ -1,6 +1,7 @@
--- Stock Prices Migration für Supabase Dashboard
--- Füge diesen SQL Code im Dashboard aus:
+-- Bergwerk Idle — Stock Prices Initialisierung
+-- Füge diesen Code im Supabase Dashboard SQL Editor aus:
 
+-- Table erstellen (falls nicht existiert)
 CREATE TABLE IF NOT EXISTS public.stock_prices (
   stock_index INTEGER PRIMARY KEY,
   stock_id TEXT NOT NULL,
@@ -13,6 +14,7 @@ CREATE TABLE IF NOT EXISTS public.stock_prices (
   last_updated TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Daten einfügen
 INSERT INTO public.stock_prices (stock_index, stock_id, base_price, current_price, volatility, dividend_rate)
 VALUES 
   (0, 'goldmine', 80, 80, 0.08, 0.001),
@@ -24,3 +26,6 @@ VALUES
   (6, 'void', 20000, 20000, 0.30, 0.0002),
   (7, 'quantum', 80000, 80000, 0.40, 0.0001)
 ON CONFLICT (stock_index) DO NOTHING;
+
+-- Verify
+SELECT * FROM public.stock_prices ORDER BY stock_index;
