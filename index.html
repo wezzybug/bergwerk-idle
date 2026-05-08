@@ -385,7 +385,17 @@ const SERVER={
         // Achievements laden
         if(data.achievements&&data.achievements.length>0){
           data.achievements.forEach(a=>achievementsUnlocked.add(a.achievement_id));
-          updateAchievements();
+          renderAchievements();
+        }
+        // Ad-Boosts laden
+        if(data.ad_boosts&&data.ad_boosts.length>0){
+          const typeMap={gps_boost:'gps',click_boost:'click',gold_boost:'gps',job_skip:'click'};
+          data.ad_boosts.forEach(b=>{
+            if(b.expires_at&&new Date(b.expires_at).getTime()>Date.now()){
+              activeAdBoost={type:typeMap[b.ad_type]||'gps',end:new Date(b.expires_at).getTime(),duration:300};
+            }
+          });
+          renderAds();
         }
         applyGemUpgrades();
         update();
@@ -906,12 +916,21 @@ function watchAd(id){
   },1000);
 }
 
-function finishAd(id){
+async function finishAd(id){
   let overlay=document.getElementById('adOverlay');
   if(overlay)overlay.remove();
   adOverlayActive=false;
   let offer=AD_OFFERS.find(o=>o.id===id);
   if(!offer)return;
+  // Server validieren
+  if(SERVER&&SERVER.online){
+    try{
+      const adTypeMap={gps_boost:'gps_boost',click_boost:'click_boost',offline_chest:'gold_boost',job_instant:'job_skip',stock_boost:'gps_boost'};
+      const res=await fetch(SERVER.url+'/watch-ad',{method:'POST',headers:{'Content-Type':'application/json','x-device-id':SERVER.deviceId,'apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhtaXF0ZXJlZ3F5dWZ5aW9kc21qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyOTY4MjAsImV4cCI6MjA2MTg3MjgyMH0.KFn0VjLQOZ3b0J8pXfC7s5n4Yr2vH6m9qR3wL5kJXcI'},body:JSON.stringify({ad_type:adTypeMap[offer.reward]||'gps_boost'})});
+      if(!res.ok){console.warn('[Server] Ad watch failed:',res.status);}
+      else{const data=await res.json();if(data.success)console.log('[Server] Ad validated, expires:',data.expires_at);}
+    }catch(e){console.warn('[Server] Ad watch error:',e);}
+  }
   // Cooldown setzen
   adCooldowns[id]=Date.now()+offer.cooldown*1000;
   // Belohnung geben
