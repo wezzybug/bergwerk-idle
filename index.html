@@ -310,6 +310,7 @@ setInterval(()=>ANALYTICS.flush(),30000);
 window.addEventListener('beforeunload',()=>ANALYTICS.trackSessionEnd());
 
 let gold=0,totalGold=0,totalGoldAllTime=0,gps=0,clickPower=1,clickMultiplier=1;
+let lastGoldTick=Date.now(); // Für zeitbasierte Gold-Berechnung
 let gems=0,prestigeMultiplier=1,easter1M=false,easter1B=false;
 let activeBoost=null,boostEnd=0,lastSave=Date.now(),totalClicks=0,totalUpgradesBought=0;
 let currentEvent=null,eventEnd=0;
@@ -640,7 +641,21 @@ function renderAll(){renderUpgrades('clickUpgrades',true);renderUpgrades('autoUp
 function update(){document.getElementById('gold').textContent=fmt(gold)+' Gold';let gpsD=gps*prestigeMultiplier*getAutoMultiplier();document.getElementById('perSec').textContent=fmt(gpsD)+' Gold/s';updateBoost();updateEvent();}
 
 // ===== GAME LOOP =====
-setInterval(()=>{if(gps>0){let m=prestigeMultiplier*getAutoMultiplier();let a=gps*m/10;gold+=a;totalGold+=a;totalGoldAllTime+=a;}updateJobs();update();if(document.getElementById('tab-ads').classList.contains('active'))renderAds();if(document.getElementById('tab-jobs').classList.contains('active'))renderJobs();},100);
+// Zeitbasierte Gold-Berechnung statt fester Addition - funktioniert auch im Hintergrund!
+function tickGold(){
+  let now=Date.now();
+  let deltaS=(now-lastGoldTick)/1000; // Sekunden seit letztem Tick
+  lastGoldTick=now;
+  // Clamp auf max 60s um Ausnahme-Zustände zu verhindern
+  if(deltaS>60)deltaS=60;
+  if(deltaS<0)deltaS=0;
+  if(gps>0){
+    let m=prestigeMultiplier*getAutoMultiplier();
+    let a=gps*m*deltaS;
+    gold+=a;totalGold+=a;totalGoldAllTime+=a;
+  }
+}
+setInterval(()=>{tickGold();updateJobs();update();if(document.getElementById('tab-ads').classList.contains('active'))renderAds();if(document.getElementById('tab-jobs').classList.contains('active'))renderJobs();},100);
 setInterval(()=>{updateStockPrices();payDividends();if(document.getElementById('tab-stocks').classList.contains('active'))renderStocks();},3000);
 setInterval(()=>renderAll(),500);
 setInterval(()=>{checkAchievements();checkEasterEggs();},1000);
@@ -653,7 +668,10 @@ function showOverlay(title,sub,action,cb){const o=document.createElement('div');
 function spawnParticles(){const c=document.createElement('div');c.className='particles';for(let i=0;i<40;i++){const p=document.createElement('div');p.className='particle';p.style.left=Math.random()*100+'%';p.style.top='-10px';p.style.background=['#ffd700','#ff6b6b','#533483','#00d2ff'][Math.floor(Math.random()*4)];p.style.animationDelay=Math.random()*2+'s';c.appendChild(p);}document.body.appendChild(c);setTimeout(()=>c.remove(),4000);}
 
 // ===== OFFLINE =====
-function calcOffline(){let now=Date.now(),elapsed=(now-lastSave)/1000;if(elapsed>30&&gps>0){let eff=Math.min(1,0.5+GEM_UPGRADES[2].count*0.2);let earned=gps*prestigeMultiplier*elapsed*eff;gold+=earned;totalGold+=earned;totalGoldAllTime+=earned;showOffline(earned,elapsed);}lastSave=now;}
+function calcOffline(){let now=Date.now(),elapsed=(now-lastSave)/1000;if(elapsed>30&&gps>0){let eff=Math.min(1,0.5+GEM_UPGRADES[2].count*0.2);let earned=gps*prestigeMultiplier*elapsed*eff;gold+=earned;totalGold+=earned;totalGoldAllTime+=earned;showOffline(earned,elapsed);}
+  // WICHTIG: lastGoldTick auf now setzen, damit tickGold() nicht nochmal Offline-Gold berechnet
+  lastGoldTick=now;
+  lastSave=now;}
 function showOffline(earned,elapsed){const o=document.createElement('div');o.className='offline-popup';o.innerHTML=`<h3>🌙 Willkommen zurück!</h3><p>Während du weg warst (${fmtTime(elapsed)}):</p><p style="font-size:1.2rem;color:#ffd700;margin:6px 0">+${fmt(earned)} Gold</p><button onclick="this.parentElement.remove()">Nice! 👍</button>`;document.body.appendChild(o);}
 
 // ===== SAVE/LOAD =====
@@ -788,6 +806,8 @@ function load(){const d=localStorage.getItem('bergwerk5');if(!d){initStocks();re
 window.onbeforeunload=save;
 setInterval(save,15000);
 load();update();renderAll();
+// lastGoldTick korrekt setzen nach Load, damit kein Sprung entsteht
+lastGoldTick=Date.now();
 
 // Consent Banner
 if(!localStorage.getItem('bergwerk_consent')){
