@@ -271,8 +271,10 @@ const ANALYTICS={
   flush(){
     if(this.queue.length===0)return;
     let batch=this.queue.splice(0);
-    // TODO: An echtes Backend senden
-    // fetch('/api/analytics',{method:'POST',body:JSON.stringify(batch)});
+    // An Backend senden
+    if(SERVER&&SERVER.online){
+      fetch(SERVER.url+'/sync',{method:'POST',headers:{'Content-Type':'application/json','x-device-id':SERVER.deviceId,'apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhtaXF0ZXJlZ3F5dWZ5aW9kc21qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyOTY4MjAsImV4cCI6MjA2MTg3MjgyMH0.KFn0VjLQOZ3b0J8pXfC7s5n4Yr2vH6m9qR3wL5kJXcI'},body:JSON.stringify({analytics:batch})}).catch(()=>{});
+    }
     console.log('[Analytics] Flush:',batch.length,'events');
     // In LocalStorage als Backup
     let stored=JSON.parse(localStorage.getItem('bergwerk_analytics')||'[]');
@@ -308,6 +310,103 @@ const ANALYTICS={
 // Auto-flush alle 30s + Session-Ende
 setInterval(()=>ANALYTICS.flush(),30000);
 window.addEventListener('beforeunload',()=>ANALYTICS.trackSessionEnd());
+
+// ===== SERVER SYNC =====
+const SERVER={
+  url:'https://xmiqereagqyufyiodsmj.supabase.co/functions/v1',
+  deviceId:null,
+  syncInterval:null,
+  lastSync:0,
+  online:navigator.onLine,
+  pending:false,
+
+  init(){
+    this.deviceId=ANALYTICS.deviceId;
+    window.addEventListener('online',()=>{this.online=true;this.sync();});
+    window.addEventListener('offline',()=>{this.online=false;});
+    // Alle 30s syncen
+    this.syncInterval=setInterval(()=>this.sync(),30000);
+    // Erster Sync nach 2s (nach load)
+    setTimeout(()=>this.sync(),2000);
+    console.log('[Server] Initialized, deviceId:',this.deviceId);
+  },
+
+  async sync(){
+    if(!this.online||this.pending)return;
+    this.pending=true;
+    try{
+      const res=await fetch(this.url+'/sync?device_id='+encodeURIComponent(this.deviceId),{
+        headers:{'apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhtaXF0ZXJlZ3F5dWZ5aW9kc21qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyOTY4MjAsImV4cCI6MjA2MTg3MjgyMH0.KFn0VjLQOZ3b0J8pXfC7s5n4Yr2vH6m9qR3wL5kJXcI'}
+      });
+      if(!res.ok){console.warn('[Server] GET failed:',res.status);this.pending=false;return;}
+      const data=await res.json();
+      if(data.success&&data.state){
+        // Server-Daten: gold, gps, prestige etc. laden
+        if(data.state.gold>0)gold=data.state.gold;
+        if(data.state.total_gold>0)totalGold=data.state.total_gold;
+        if(data.state.total_gold_all_time>0)totalGoldAllTime=data.state.total_gold_all_time;
+        if(data.state.gems>0)gems=data.state.gems;
+        if(data.state.prestige_multiplier>1)prestigeMultiplier=data.state.prestige_multiplier;
+        if(data.state.click_power>1)clickPower=data.state.click_power;
+        if(data.state.click_multiplier>1)clickMultiplier=data.state.click_multiplier;
+        if(data.state.gps>0)gps=data.state.gps;
+        if(data.state.total_clicks>0)totalClicks=data.state.total_clicks;
+        if(data.state.total_upgrades_bought>0)totalUpgradesBought=data.state.total_upgrades_bought;
+        if(data.state.easter_1m)easter1M=true;
+        if(data.state.easter_1b)easter1B=true;
+        // Upgrades laden
+        if(data.upgrades&&data.upgrades.length>0){
+          data.upgrades.forEach(u=>{
+            const lists={click:CLICK_UPGRADES,auto:AUTO_UPGRADES,gem:GEM_UPGRADES};
+            const list=lists[u.upgrade_type];
+            if(list&&list[u.upgrade_index])list[u.upgrade_index].count=u.count;
+          });
+        }
+        applyGemUpgrades();
+        update();
+        renderAll();
+        console.log('[Server] Loaded state from server');
+      }
+      // Jetzt aktuellen Stand hochladen
+      await this.push();
+      this.lastSync=Date.now();
+    }catch(e){console.warn('[Server] Sync error:',e);}
+    this.pending=false;
+  },
+
+  async push(){
+    if(!this.online)return;
+    const payload={
+      gold,total_gold:totalGold,total_gold_all_time:totalGoldAllTime,
+      gems,prestige_multiplier:prestigeMultiplier,
+      click_power:clickPower,click_multiplier:clickMultiplier,
+      gps,total_clicks:totalClicks,total_upgrades_bought:totalUpgradesBought,
+      easter_1m:easter1M,easter_1b:easter1B,
+      gold_actions:0,
+      session_duration:Math.floor((Date.now()-ANALYTICS.sessionStart)/1000),
+      session_id:ANALYTICS.sessionId,
+      upgrades:[
+        ...CLICK_UPGRADES.map((u,i)=>({type:'click',index:i,count:u.count})),
+        ...AUTO_UPGRADES.map((u,i)=>({type:'auto',index:i,count:u.count}))
+      ]
+    };
+    const res=await fetch(this.url+'/sync',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-device-id':this.deviceId,'apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhtaXF0ZXJlZ3F5dWZ5aW9kc21qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyOTY4MjAsImV4cCI6MjA2MTg3MjgyMH0.KFn0VjLQOZ3b0J8pXfC7s5n4Yr2vH6m9qR3wL5kJXcI'},
+      body:JSON.stringify(payload)
+    });
+    if(res.ok){console.log('[Server] Push OK');}
+    else{console.warn('[Server] Push failed:',res.status);}
+  },
+
+  // Leaderboard
+  async leaderboard(type='gold',limit=10){
+    const res=await fetch(this.url+'/leaderboard?type='+type+'&limit='+limit,{
+      headers:{'apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhtaXF0ZXJlZ3F5dWZ5aW9kc21qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyOTY4MjAsImV4cCI6MjA2MTg3MjgyMH0.KFn0VjLQOZ3b0J8pXfC7s5n4Yr2vH6m9qR3wL5kJXcI'}
+    });
+    return res.ok?await res.json():null;
+  }
+};
 
 let gold=0,totalGold=0,totalGoldAllTime=0,gps=0,clickPower=1,clickMultiplier=1;
 let lastGoldTick=Date.now(); // Für zeitbasierte Gold-Berechnung
@@ -831,6 +930,9 @@ if('serviceWorker' in navigator){
     });
   }).catch(e=>console.log('SW fail:',e));
 }
+
+// Server Sync initialisieren
+SERVER.init();
 
 // Consent
 function acceptConsent(){
