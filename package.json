@@ -1,0 +1,27 @@
+{
+  "name": "bergwerk-idle",
+  "version": "1.0.0",
+  "description": "⛏️ Bergwerk Idle - Bergbau-Idle-Game",
+  "main": "index.html",
+  "scripts": {
+    "build": "mkdir -p www && cp index.html manifest.json sw.js privacy.html www/ && cp -r icons www/",
+    "sync": "npm run build && npx cap sync",
+    "sync:android": "npm run sync && npx cap open android",
+    "sync:ios": "npm run sync && npx cap open ios",
+    "android": "npm run sync:android",
+    "ios": "npm run sync:ios"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wezzybug/bergwerk-idle.git"
+  },
+  "keywords": ["idle", "game", "mining", "bergwerk"],
+  "author": "Wezzy",
+  "license": "ISC",
+  "dependencies": {
+    "@capacitor/android": "^8.3.2",
+    "@capacitor/cli": "^8.3.2",
+    "@capacitor/core": "^8.3.2",
+    "@capacitor/ios": "^8.3.2"
+  }
+}

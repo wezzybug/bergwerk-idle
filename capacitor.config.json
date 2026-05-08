@@ -1,0 +1,13 @@
+{
+  "appId": "com.wezzy.bergwerkidle",
+  "appName": "Bergwerk Idle",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": false
+    }
+  }
+}
