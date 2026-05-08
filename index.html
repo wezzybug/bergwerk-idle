@@ -362,6 +362,14 @@ const SERVER={
             if(list&&list[u.upgrade_index])list[u.upgrade_index].count=u.count;
           });
         }
+        // Jobs laden
+        if(data.jobs&&data.jobs.length>0){
+          data.jobs.forEach(j=>{if(JOBS[j.job_index])JOBS[j.job_index].count=j.count;});
+        }
+        // Stocks laden
+        if(data.stocks&&data.stocks.length>0){
+          data.stocks.forEach(s=>{if(stockState[s.stock_index]){stockState[s.stock_index].shares=s.shares;stockState[s.stock_index].avgBuy=s.avg_buy;}});
+        }
         applyGemUpgrades();
         update();
         renderAll();
@@ -387,8 +395,11 @@ const SERVER={
       session_id:ANALYTICS.sessionId,
       upgrades:[
         ...CLICK_UPGRADES.map((u,i)=>({type:'click',index:i,count:u.count})),
-        ...AUTO_UPGRADES.map((u,i)=>({type:'auto',index:i,count:u.count}))
-      ]
+        ...AUTO_UPGRADES.map((u,i)=>({type:'auto',index:i,count:u.count})),
+        ...GEM_UPGRADES.map((u,i)=>({type:'gem',index:i,count:u.count}))
+      ],
+      jobs:JOBS.map((j,i)=>({index:i,count:j.count})),
+      stocks:stockState.map((s,i)=>({index:i,shares:s.shares,avg_buy:s.avgBuy}))
     };
     const res=await fetch(this.url+'/sync',{
       method:'POST',
