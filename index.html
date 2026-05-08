@@ -129,6 +129,15 @@ h2{color:#ffd700;font-size:1rem;margin:10px 0 6px;border-bottom:1px solid #333;p
 .ad-overlay .ad-fake-ad h3{color:#ffd700;font-size:.9rem;margin-bottom:4px}
 .ad-overlay .ad-fake-ad p{color:#888;font-size:.72rem}
 .ad-overlay .ad-fake-ad .ad-brand{color:#533483;font-size:.6rem;margin-top:6px}
+/* Consent */
+.consent-bar{position:fixed;bottom:0;left:0;width:100%;background:rgba(26,26,46,.97);border-top:1px solid #ffd700;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;z-index:999;gap:10px;flex-wrap:wrap;backdrop-filter:blur(8px)}
+.consent-bar p{color:#ccc;font-size:.72rem;flex:1;min-width:200px}
+.consent-bar a{color:#ffd700}
+.consent-btns{display:flex;gap:6px}
+.consent-accept{background:#ffd700;color:#1a1a2e;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-weight:700;font-size:.78rem}
+.consent-accept:hover{background:#ffe44d}
+.consent-deny{background:#333;color:#888;border:1px solid #555;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:.72rem}
+.consent-deny:hover{background:#444}
 </style>
 </head>
 <body>
@@ -191,9 +200,115 @@ h2{color:#ffd700;font-size:1rem;margin:10px 0 6px;border-bottom:1px solid #333;p
   <h2>💎 Kristall-Upgrades</h2><div id="gemUpgrades"></div>
 </div>
 
+<div id="consentBar" class="consent-bar" style="display:none">
+  <p>🍪 Dieses Spiel sammelt anonyme Gerätedaten (Device-ID, Bildschirmgröße, Sprache) und Spiel-Events für Verbesserung und Werbung. Keine persönlichen Daten! <a href="privacy.html">Datenschutzerklärung</a></p>
+  <div class="consent-btns">
+    <button class="consent-accept" onclick="acceptConsent()">Akzeptieren</button>
+    <button class="consent-deny" onclick="denyConsent()">Nur notwendig</button>
+  </div>
+</div>
 <div id="eventArea"></div>
 
 <script>
+// ===== ANALYTICS =====
+const ANALYTICS={
+  deviceId:null,sessionId:null,sessionStart:Date.now(),
+  events:[],queue:[],consentGiven:false,
+  
+  // Device Fingerprint (keine PI! nur Technicals)
+  fingerprint(){
+    const c=document.createElement('canvas');const ctx=c.getContext('2d');
+    ctx.textBaseline='top';ctx.font='14px Arial';ctx.fillText('fp',2,2);
+    let hash=0;const str=c.toDataURL()+navigator.language+screen.width+'x'+screen.height+screen.colorDepth+(navigator.hardwareConcurrency||0)+(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    for(let i=0;i<str.length;i++){hash=((hash<<5)-hash)+str.charCodeAt(i);hash|=0;}
+    return Math.abs(hash).toString(36);
+  },
+  
+  init(){
+    // Persisted Device ID
+    let stored=localStorage.getItem('bergwerk_did');
+    this.deviceId=stored||('d_'+this.fingerprint()+'_'+Date.now().toString(36));
+    if(!stored)localStorage.setItem('bergwerk_did',this.deviceId);
+    // Session ID
+    this.sessionId='s_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);
+    this.sessionStart=Date.now();
+    // Consent pruefen
+    this.consentGiven=localStorage.getItem('bergwerk_consent')==='true';
+    // Device Info sammeln
+    this.deviceInfo={
+      id:this.deviceId,
+      lang:navigator.language,
+      tz:Intl.DateTimeFormat().resolvedOptions().timeZone,
+      screen:screen.width+'x'+screen.height,
+      dpr:window.devicePixelRatio||1,
+      cores:navigator.hardwareConcurrency||0,
+      mem:navigator.deviceMemory||0,
+      ua:navigator.userAgent,
+      platform:navigator.platform||'',
+      online:navigator.onLine,
+      touch:'ontouchstart'in window,
+      mobile:/Mobi|Android/i.test(navigator.userAgent),
+      referrer:document.referrer||'direct'
+    };
+    this.track('session_start');
+  },
+  
+  track(event,data={}){
+    if(!this.consentGiven)return; // Nur tracken mit Consent!
+    let entry={
+      ts:Date.now(),
+      session:this.sessionId,
+      device:this.deviceId,
+      event,
+      ...data
+    };
+    this.events.push(entry);
+    this.queue.push(entry);
+    // Batch: alle 20 Events oder alle 30s flushen
+    if(this.queue.length>=20)this.flush();
+  },
+  
+  flush(){
+    if(this.queue.length===0)return;
+    let batch=this.queue.splice(0);
+    // TODO: An echtes Backend senden
+    // fetch('/api/analytics',{method:'POST',body:JSON.stringify(batch)});
+    console.log('[Analytics] Flush:',batch.length,'events');
+    // In LocalStorage als Backup
+    let stored=JSON.parse(localStorage.getItem('bergwerk_analytics')||'[]');
+    stored=stored.concat(batch).slice(-200); // Max 200 behalten
+    localStorage.setItem('bergwerk_analytics',JSON.stringify(stored));
+  },
+  
+  grantConsent(){
+    this.consentGiven=true;
+    localStorage.setItem('bergwerk_consent','true');
+    this.track('consent_granted');
+  },
+  
+  revokeConsent(){
+    this.consentGiven=false;
+    localStorage.setItem('bergwerk_consent','false');
+    localStorage.removeItem('bergwerk_analytics');
+  },
+  
+  // Game-spezifische Tracker
+  trackUpgrade(id,level,cost){this.track('upgrade',{id,level,cost});},
+  trackMine(gold){this.track('mine',{gold});},
+  trackJob(id,reward){this.track('job_complete',{id,reward});},
+  trackStock(action,symbol,qty,price){this.track('stock_trade',{action,symbol,qty,price});},
+  trackAd(id,type){this.track('ad_watched',{id,type});},
+  trackPrestige(gems,total){this.track('prestige',{gems,totalGold:total});},
+  trackSessionEnd(){
+    this.track('session_end',{duration:Math.floor((Date.now()-this.sessionStart)/1000),gold,gps,totalGold:totalGoldAllTime,gems});
+    this.flush();
+  }
+};
+
+// Auto-flush alle 30s + Session-Ende
+setInterval(()=>ANALYTICS.flush(),30000);
+window.addEventListener('beforeunload',()=>ANALYTICS.trackSessionEnd());
+
 let gold=0,totalGold=0,totalGoldAllTime=0,gps=0,clickPower=1,clickMultiplier=1;
 let gems=0,prestigeMultiplier=1,easter1M=false,easter1B=false;
 let activeBoost=null,boostEnd=0,lastSave=Date.now(),totalClicks=0,totalUpgradesBought=0;
@@ -326,6 +441,7 @@ function doMine(){
   applyAdBoost();
   let amt=base*boost;
   gold+=amt;totalGold+=amt;totalGoldAllTime+=amt;totalClicks++;
+  if(totalClicks%10===0)ANALYTICS.trackMine(amt); // Jeden 10. Klick tracken
   showFloat('+'+fmt(amt));
   document.getElementById('mineBtn').classList.add('shake');
   setTimeout(()=>document.getElementById('mineBtn').classList.remove('shake'),300);
@@ -342,8 +458,8 @@ function showFloat(txt){
 }
 
 // ===== UPGRADES =====
-function buyClick(i,qty){let u=CLICK_UPGRADES[i],b=0;for(let q=0;q<(qty||1);q++){let c=cost(u);if(gold<c)break;gold-=c;u.count++;b++;clickPower+=u.power;}if(b){totalUpgradesBought+=b;update();renderAll();}}
-function buyAuto(i,qty){let u=AUTO_UPGRADES[i],b=0;for(let q=0;q<(qty||1);q++){let c=cost(u);if(gold<c)break;gold-=c;u.count++;b++;}if(b){totalUpgradesBought+=b;recalcGPS();update();renderAll();}}
+function buyClick(i,qty){let u=CLICK_UPGRADES[i],b=0;for(let q=0;q<(qty||1);q++){let c=cost(u);if(gold<c)break;gold-=c;u.count++;b++;clickPower+=u.power;}if(b){totalUpgradesBought+=b;ANALYTICS.trackUpgrade(u.id,u.count,cost(u));update();renderAll();}}
+function buyAuto(i,qty){let u=AUTO_UPGRADES[i],b=0;for(let q=0;q<(qty||1);q++){let c=cost(u);if(gold<c)break;gold-=c;u.count++;b++;}if(b){totalUpgradesBought+=b;ANALYTICS.trackUpgrade(u.id,u.count,cost(u));recalcGPS();update();renderAll();}}
 function buyGem(i){let u=GEM_UPGRADES[i],c=cost(u);if(gems>=c&&(!u.max||u.count<u.max)){gems-=c;u.count++;applyGemUpgrades();renderPrestige();}}
 function buyMaxClick(){CLICK_UPGRADES.forEach((_,i)=>buyClick(i,999));}
 function buyMaxAuto(){AUTO_UPGRADES.forEach((_,i)=>buyAuto(i,999));}
@@ -370,6 +486,7 @@ function claimJob(id){
   let job=JOBS.find(jj=>jj.id===id);
   let reward=job.multReward?Math.floor(job.reward*Math.max(1,1+Math.log10(Math.max(1,gps))*0.5)*prestigeMultiplier):job.reward;
   gold+=reward;totalGold+=reward;totalGoldAllTime+=reward;job.count++;stats_jobsDone++;
+  ANALYTICS.trackJob(job.id,reward);
   showFloat('+'+fmt(reward));
   // Cooldown starten
   jobCooldowns[id]=Date.now()+(job.cooldown||0)*1000;
@@ -413,14 +530,12 @@ function buyStock(i,qty){
   let oldTotal=s.shares*s.avgBuy;
   gold-=total;s.shares+=qty;
   s.avgBuy=s.shares>0?(oldTotal+s.price*qty)/s.shares:0;
-  stats_stocksTraded++;update();renderStocks();
-}
-function sellStock(i,qty){
+  stats_stocksTraded++;ANALYTICS.trackStock('buy',s.id,qty,s.price);update();renderStocks();(i,qty){
   let s=stockState[i];if(s.shares<qty)return;
   let revenue=s.price*qty*(1-STOCK_FEE); // -5% Gebühr
   gold+=revenue;s.shares-=qty;
   if(s.shares===0)s.avgBuy=0;
-  stats_stocksTraded++;update();renderStocks();
+  stats_stocksTraded++;ANALYTICS.trackStock('sell',s.id,qty,s.price);update();renderStocks();
 }
 function sellAllStock(i){let s=stockState[i];if(s.shares>0)sellStock(i,s.shares);}
 function renderStocks(){
@@ -514,7 +629,7 @@ function renderAchievements(){document.getElementById('achTotal').textContent=AC
 
 // ===== PRESTIGE =====
 function getPrestigeGems(){return Math.floor(totalGoldAllTime/1e7);}
-function doPrestige(){if(totalGoldAllTime<1e7)return;gems+=getPrestigeGems();prestigeMultiplier=1+gems*0.1;gold=0;totalGold=0;totalGoldAllTime=0;gps=0;clickPower=1;clickMultiplier=1;totalClicks=0;totalUpgradesBought=0;activeBoost=null;boostEnd=0;currentEvent=null;eventEnd=0;easter1M=false;easter1B=false;CLICK_UPGRADES.forEach(u=>u.count=0);AUTO_UPGRADES.forEach(u=>u.count=0);activeJobs={};jobCooldowns={};marketEvent=null;marketEventEnd=0;stockState.forEach(s=>{s.shares=0;s.avgBuy=0;s.trend=0;});applyGemUpgrades();update();renderAll();switchTab('prestige');spawnParticles();}
+function doPrestige(){if(totalGoldAllTime<1e7)return;ANALYTICS.trackPrestige(getPrestigeGems(),totalGoldAllTime);gems+=getPrestigeGems();prestigeMultiplier=1+gems*0.1;gold=0;totalGold=0;totalGoldAllTime=0;gps=0;clickPower=1;clickMultiplier=1;totalClicks=0;totalUpgradesBought=0;activeBoost=null;boostEnd=0;currentEvent=null;eventEnd=0;easter1M=false;easter1B=false;CLICK_UPGRADES.forEach(u=>u.count=0);AUTO_UPGRADES.forEach(u=>u.count=0);activeJobs={};jobCooldowns={};marketEvent=null;marketEventEnd=0;stockState.forEach(s=>{s.shares=0;s.avgBuy=0;s.trend=0;});applyGemUpgrades();update();renderAll();switchTab('prestige');spawnParticles();}
 function renderPrestige(){let pg=getPrestigeGems(),pm=1+(gems+pg)*0.1;document.getElementById('prestigePreview').textContent='x'+pm.toFixed(1);document.getElementById('prestigeGems').textContent=pg;let btn=document.getElementById('prestigeBtn');btn.classList.toggle('cant',totalGoldAllTime<1e7);btn.textContent=totalGoldAllTime>=1e7?`✨ Prestige (+${pg} 💎)`:'✨ Prestige (min. 10M)';document.getElementById('gemUpgrades').innerHTML=GEM_UPGRADES.map((u,i)=>{let c=cost(u),can=gems>=c,atMax=u.max&&u.count>=u.max;return `<div class="upgrade"><div class="upgrade-info"><div class="upgrade-name">${u.name} (${u.count}${u.max?'/'+u.max:''})</div><div class="upgrade-desc">${u.desc}</div></div><button class="upgrade-btn${can&&!atMax?'':' cant'}" onclick="buyGem(${i})">${atMax?'MAX':fmt(c)+' 💎'}</button></div>`;}).join('');}
 
 // ===== RENDER =====
@@ -657,6 +772,7 @@ function finishAd(id){
       break;
   }
   stats_boostsUsed++;
+  ANALYTICS.trackAd(id,offer.reward);
   update();renderAds();
 }
 
@@ -665,15 +781,31 @@ function applyAdBoost(){
   if(Date.now()>activeAdBoost.end){activeAdBoost=null;return;}
 }
 
-function save(){localStorage.setItem('bergwerk4',JSON.stringify({gold,totalGold,totalGoldAllTime,gems,prestigeMultiplier,clickPower,clickMultiplier,easter1M,easter1B,clickCounts:CLICK_UPGRADES.map(u=>u.count),autoCounts:AUTO_UPGRADES.map(u=>u.count),gemCounts:GEM_UPGRADES.map(u=>u.count),achievements:[...achievementsUnlocked],totalClicks,totalUpgradesBought,stats_eventsSeen,stats_boostsUsed,stats_jobsDone,stats_stocksTraded,stats_marketCrashes,jobCounts:JOBS.map(j=>j.count),stockShares:stockState.map(s=>s.shares),stockAvgBuy:stockState.map(s=>s.avgBuy),adCooldowns,activeAdBoost,lastSave:Date.now()}));}
-function load(){const d=localStorage.getItem('bergwerk4');if(!d){initStocks();return;}const s=JSON.parse(d);gold=s.gold||0;totalGold=s.totalGold||0;totalGoldAllTime=s.totalGoldAllTime||0;gems=s.gems||0;prestigeMultiplier=s.prestigeMultiplier||1;clickPower=s.clickPower||1;clickMultiplier=s.clickMultiplier||1;easter1M=s.easter1M||false;easter1B=s.easter1B||false;totalClicks=s.totalClicks||0;totalUpgradesBought=s.totalUpgradesBought||0;stats_eventsSeen=s.stats_eventsSeen||0;stats_boostsUsed=s.stats_boostsUsed||0;stats_jobsDone=s.stats_jobsDone||0;stats_stocksTraded=s.stats_stocksTraded||0;stats_marketCrashes=s.stats_marketCrashes||0;if(s.adCooldowns)adCooldowns=s.adCooldowns;if(s.activeAdBoost&&s.activeAdBoost.end>Date.now())activeAdBoost=s.activeAdBoost;if(s.clickCounts)s.clickCounts.forEach((c,i)=>{CLICK_UPGRADES[i].count=c;});if(s.autoCounts)s.autoCounts.forEach((c,i)=>{AUTO_UPGRADES[i].count=c;});if(s.gemCounts)s.gemCounts.forEach((c,i)=>{GEM_UPGRADES[i].count=c;});if(s.achievements)achievementsUnlocked=new Set(s.achievements);if(s.jobCounts)s.jobCounts.forEach((c,i)=>{JOBS[i].count=c;});lastSave=s.lastSave||Date.now();initStocks();if(s.stockShares)s.stockShares.forEach((c,i)=>{stockState[i].shares=c;});if(s.stockAvgBuy)s.stockAvgBuy.forEach((c,i)=>{stockState[i].avgBuy=c;});applyGemUpgrades();calcOffline();}
+function save(){localStorage.setItem('bergwerk5',JSON.stringify({gold,totalGold,totalGoldAllTime,gems,prestigeMultiplier,clickPower,clickMultiplier,easter1M,easter1B,clickCounts:CLICK_UPGRADES.map(u=>u.count),autoCounts:AUTO_UPGRADES.map(u=>u.count),gemCounts:GEM_UPGRADES.map(u=>u.count),achievements:[...achievementsUnlocked],totalClicks,totalUpgradesBought,stats_eventsSeen,stats_boostsUsed,stats_jobsDone,stats_stocksTraded,stats_marketCrashes,jobCounts:JOBS.map(j=>j.count),stockShares:stockState.map(s=>s.shares),stockAvgBuy:stockState.map(s=>s.avgBuy),adCooldowns,activeAdBoost,lastSave:Date.now()}));}
+function load(){const d=localStorage.getItem('bergwerk5');if(!d){initStocks();return;}const s=JSON.parse(d);gold=s.gold||0;totalGold=s.totalGold||0;totalGoldAllTime=s.totalGoldAllTime||0;gems=s.gems||0;prestigeMultiplier=s.prestigeMultiplier||1;clickPower=s.clickPower||1;clickMultiplier=s.clickMultiplier||1;easter1M=s.easter1M||false;easter1B=s.easter1B||false;totalClicks=s.totalClicks||0;totalUpgradesBought=s.totalUpgradesBought||0;stats_eventsSeen=s.stats_eventsSeen||0;stats_boostsUsed=s.stats_boostsUsed||0;stats_jobsDone=s.stats_jobsDone||0;stats_stocksTraded=s.stats_stocksTraded||0;stats_marketCrashes=s.stats_marketCrashes||0;if(s.adCooldowns)adCooldowns=s.adCooldowns;if(s.activeAdBoost&&s.activeAdBoost.end>Date.now())activeAdBoost=s.activeAdBoost;if(s.clickCounts)s.clickCounts.forEach((c,i)=>{CLICK_UPGRADES[i].count=c;});if(s.autoCounts)s.autoCounts.forEach((c,i)=>{AUTO_UPGRADES[i].count=c;});if(s.gemCounts)s.gemCounts.forEach((c,i)=>{GEM_UPGRADES[i].count=c;});if(s.achievements)achievementsUnlocked=new Set(s.achievements);if(s.jobCounts)s.jobCounts.forEach((c,i)=>{JOBS[i].count=c;});lastSave=s.lastSave||Date.now();initStocks();if(s.stockShares)s.stockShares.forEach((c,i)=>{stockState[i].shares=c;});if(s.stockAvgBuy)s.stockAvgBuy.forEach((c,i)=>{stockState[i].avgBuy=c;});applyGemUpgrades();calcOffline();}
 window.onbeforeunload=save;
 setInterval(save,15000);
 load();update();renderAll();
 
+// Consent Banner
+if(!localStorage.getItem('bergwerk_consent')){
+  document.getElementById('consentBar').style.display='flex';
+}
+ANALYTICS.init();
+
 // PWA Service Worker
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('sw.js').then(()=>console.log('SW registered')).catch(e=>console.log('SW fail:',e));
+}
+
+// Consent
+function acceptConsent(){
+  ANALYTICS.grantConsent();
+  document.getElementById('consentBar').style.display='none';
+}
+function denyConsent(){
+  ANALYTICS.revokeConsent();
+  document.getElementById('consentBar').style.display='none';
 }
 </script>
 </body>

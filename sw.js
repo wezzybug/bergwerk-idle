@@ -1,7 +1,8 @@
-const CACHE_NAME = 'bergwerk-idle-v1';
+const CACHE_NAME = 'bergwerk-idle-v2';
 const ASSETS = [
   '/',
   '/index.html',
+  '/privacy.html',
   '/manifest.json',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png'
