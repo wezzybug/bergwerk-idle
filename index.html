@@ -530,7 +530,9 @@ function buyStock(i,qty){
   let oldTotal=s.shares*s.avgBuy;
   gold-=total;s.shares+=qty;
   s.avgBuy=s.shares>0?(oldTotal+s.price*qty)/s.shares:0;
-  stats_stocksTraded++;ANALYTICS.trackStock('buy',s.id,qty,s.price);update();renderStocks();(i,qty){
+  stats_stocksTraded++;ANALYTICS.trackStock('buy',s.id,qty,s.price);update();renderStocks();
+}
+function sellStock(i,qty){
   let s=stockState[i];if(s.shares<qty)return;
   let revenue=s.price*qty*(1-STOCK_FEE); // -5% Gebühr
   gold+=revenue;s.shares-=qty;
