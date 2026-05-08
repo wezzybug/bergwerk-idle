@@ -589,10 +589,9 @@ function getAutoMultiplier(){
   let m=1;
   if(activeBoost==='auto')m=2;
   if(activeBoost==='gold')m=3;
-  if(activeAdBoost){
-    if(activeAdBoost.type==='gps')m*=2;
-    applyAdBoost();
-  }
+  // Erst ablauf prüfen, DANN multiplizieren — sonst kriegt man einen Tick zu viel
+  applyAdBoost();
+  if(activeAdBoost && activeAdBoost.type==='gps')m*=2;
   return m;
 }
 function triggerEvent(){let e=['goldrush','deepmine','dwarfparty'][Math.floor(Math.random()*3)];currentEvent=e;eventEnd=Date.now()+60000;stats_eventsSeen++;if(e==='goldrush'){activeBoost='auto';boostEnd=eventEnd;}if(e==='deepmine'){activeBoost='click';boostEnd=eventEnd;}if(e==='dwarfparty'){activeBoost='gold';boostEnd=eventEnd;}}
@@ -632,7 +631,7 @@ function renderAchievements(){document.getElementById('achTotal').textContent=AC
 
 // ===== PRESTIGE =====
 function getPrestigeGems(){return Math.floor(totalGoldAllTime/1e7);}
-function doPrestige(){if(totalGoldAllTime<1e7)return;ANALYTICS.trackPrestige(getPrestigeGems(),totalGoldAllTime);gems+=getPrestigeGems();prestigeMultiplier=1+gems*0.1;gold=0;totalGold=0;totalGoldAllTime=0;gps=0;clickPower=1;clickMultiplier=1;totalClicks=0;totalUpgradesBought=0;activeBoost=null;boostEnd=0;currentEvent=null;eventEnd=0;easter1M=false;easter1B=false;CLICK_UPGRADES.forEach(u=>u.count=0);AUTO_UPGRADES.forEach(u=>u.count=0);activeJobs={};jobCooldowns={};marketEvent=null;marketEventEnd=0;stockState.forEach(s=>{s.shares=0;s.avgBuy=0;s.trend=0;});applyGemUpgrades();update();renderAll();switchTab('prestige');spawnParticles();}
+function doPrestige(){if(totalGoldAllTime<1e7)return;ANALYTICS.trackPrestige(getPrestigeGems(),totalGoldAllTime);gems+=getPrestigeGems();prestigeMultiplier=1+gems*0.1;gold=0;totalGold=0;totalGoldAllTime=0;gps=0;clickPower=1;clickMultiplier=1;totalClicks=0;totalUpgradesBought=0;activeBoost=null;boostEnd=0;currentEvent=null;eventEnd=0;easter1M=false;easter1B=false;CLICK_UPGRADES.forEach(u=>u.count=0);AUTO_UPGRADES.forEach(u=>u.count=0);activeJobs={};jobCooldowns={};marketEvent=null;marketEventEnd=0;stockState.forEach(s=>{s.shares=0;s.avgBuy=0;s.trend=0;});initStocks();applyGemUpgrades();update();renderAll();switchTab('prestige');spawnParticles();}
 function renderPrestige(){let pg=getPrestigeGems(),pm=1+(gems+pg)*0.1;document.getElementById('prestigePreview').textContent='x'+pm.toFixed(1);document.getElementById('prestigeGems').textContent=pg;let btn=document.getElementById('prestigeBtn');btn.classList.toggle('cant',totalGoldAllTime<1e7);btn.textContent=totalGoldAllTime>=1e7?`✨ Prestige (+${pg} 💎)`:'✨ Prestige (min. 10M)';document.getElementById('gemUpgrades').innerHTML=GEM_UPGRADES.map((u,i)=>{let c=cost(u),can=gems>=c,atMax=u.max&&u.count>=u.max;return `<div class="upgrade"><div class="upgrade-info"><div class="upgrade-name">${u.name} (${u.count}${u.max?'/'+u.max:''})</div><div class="upgrade-desc">${u.desc}</div></div><button class="upgrade-btn${can&&!atMax?'':' cant'}" onclick="buyGem(${i})">${atMax?'MAX':fmt(c)+' 💎'}</button></div>`;}).join('');}
 
 // ===== RENDER =====
@@ -806,8 +805,7 @@ function load(){const d=localStorage.getItem('bergwerk5');if(!d){initStocks();re
 window.onbeforeunload=save;
 setInterval(save,15000);
 load();update();renderAll();
-// lastGoldTick korrekt setzen nach Load, damit kein Sprung entsteht
-lastGoldTick=Date.now();
+// lastGoldTick wurde bereits in calcOffline() gesetzt — kein doppeltes Set nötig
 
 // Consent Banner
 if(!localStorage.getItem('bergwerk_consent')){
@@ -817,7 +815,21 @@ ANALYTICS.init();
 
 // PWA Service Worker
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('sw.js').then(()=>console.log('SW registered')).catch(e=>console.log('SW fail:',e));
+  navigator.serviceWorker.register('sw.js').then(reg=>{
+    console.log('SW registered');
+    // Update erkennen & automatisch neuen SW aktivieren
+    reg.addEventListener('updatefound',()=>{
+      const newSW=reg.installing;
+      newSW.addEventListener('statechange',()=>{
+        if(newSW.state==='installed'&&navigator.serviceWorker.controller){
+          // Neuer SW bereit — Seite neu laden
+          console.log('New SW ready, reloading...');
+          newSW.postMessage('SKIP_WAITING');
+          setTimeout(()=>location.reload(),500);
+        }
+      });
+    });
+  }).catch(e=>console.log('SW fail:',e));
 }
 
 // Consent

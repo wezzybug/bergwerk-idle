@@ -2,7 +2,7 @@
   "name": "Bergwerk Idle",
   "short_name": "Bergwerk",
   "description": "⛏️ Bergwerk Idle — Ein deutsches Idle-Game mit Klick-Mining, Jobs, Aktien & Prestige",
-  "start_url": "/",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#1a1a2e",
   "theme_color": "#ffd700",
