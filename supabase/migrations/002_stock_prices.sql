@@ -1,5 +1,5 @@
--- Bergwerk Idle — Stock Prices Migration
--- Füge die stock_prices Tabelle hinzu und initialisiere die 8 Aktien
+-- Stock Prices Migration für Supabase Dashboard
+-- Füge diesen SQL Code im Dashboard aus:
 
 CREATE TABLE IF NOT EXISTS public.stock_prices (
   stock_index INTEGER PRIMARY KEY,
@@ -13,7 +13,6 @@ CREATE TABLE IF NOT EXISTS public.stock_prices (
   last_updated TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Füge die 8 Aktien ein (wird bei first-run aufgerufen)
 INSERT INTO public.stock_prices (stock_index, stock_id, base_price, current_price, volatility, dividend_rate)
 VALUES 
   (0, 'goldmine', 80, 80, 0.08, 0.001),
@@ -25,26 +24,3 @@ VALUES
   (6, 'void', 20000, 20000, 0.30, 0.0002),
   (7, 'quantum', 80000, 80000, 0.40, 0.0001)
 ON CONFLICT (stock_index) DO NOTHING;
-
--- Aktualisiere Preise jede Stunde (nur Trigger setzen)
-CREATE OR REPLACE FUNCTION public.update_stock_prices()
-RETURNS TRIGGER AS $$
-DECLARE
-  s RECORD;
-  base_change DOUBLE PRECISION;
-  trend_change DOUBLE PRECISION;
-  mean_revert DOUBLE PRECISION;
-BEGIN
-  FOR s IN SELECT * FROM public.stock_prices LOOP
-    base_change := (RANDOM() - 0.48) * s.volatility * 0.5;
-    trend_change := (RANDOM() - 0.5) * s.volatility * 0.3;
-    mean_revert := (s.base_price - s.current_price) / s.base_price * 0.015;
-    s.current_price := GREATEST(s.base_price * 0.05, s.current_price * (1 + base_change + trend_change + mean_revert));
-    s.trend := trend_change;
-    s.prev_price := s.current_price;
-    s.last_updated := NOW();
-    UPDATE public.stock_prices SET current_price = s.current_price, prev_price = s.prev_price, trend = s.trend, last_updated = NOW() WHERE stock_index = s.stock_index;
-  END LOOP;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
