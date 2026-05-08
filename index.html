@@ -632,36 +632,32 @@ function showFloat(txt){
 
 // ===== UPGRADES =====
 function buyClick(i,qty){
-  for(let q=0;q<(qty||1);q++){
-    SERVER.action('buy_click_upgrade',{index:i}).then(r=>{
-      if(r&&r.success){
-        gold=r.gold;
-        CLICK_UPGRADES[i].count=r.upgrade_count;
-        clickPower=r.click_power;
-        totalUpgradesBought++;
-        ANALYTICS.trackUpgrade(CLICK_UPGRADES[i].id,CLICK_UPGRADES[i].count,0);
-        update();renderAll();
-      }
-    });
-  }
+  SERVER.action('buy_click_upgrade',{index:i,qty:qty||1}).then(r=>{
+    if(r&&r.success){
+      gold=r.gold;
+      CLICK_UPGRADES[i].count=r.upgrade_count;
+      clickPower=r.click_power;
+      totalUpgradesBought++;
+      ANALYTICS.trackUpgrade(CLICK_UPGRADES[i].id,CLICK_UPGRADES[i].count,0);
+      update();renderAll();
+    } else if(r&&r.error){showFloat('❌ '+r.error);}
+  });
 }
 function buyAuto(i,qty){
-  for(let q=0;q<(qty||1);q++){
-    SERVER.action('buy_auto_upgrade',{index:i}).then(r=>{
-      if(r&&r.success){
-        gold=r.gold;
-        AUTO_UPGRADES[i].count=r.upgrade_count;
-        totalUpgradesBought++;
-        ANALYTICS.trackUpgrade(AUTO_UPGRADES[i].id,AUTO_UPGRADES[i].count,0);
-        recalcGPS();
-        update();renderAll();
-      }
-    });
-  }
+  SERVER.action('buy_auto_upgrade',{index:i,qty:qty||1}).then(r=>{
+    if(r&&r.success){
+      gold=r.gold;
+      AUTO_UPGRADES[i].count=r.upgrade_count;
+      totalUpgradesBought++;
+      ANALYTICS.trackUpgrade(AUTO_UPGRADES[i].id,AUTO_UPGRADES[i].count,0);
+      recalcGPS();
+      update();renderAll();
+    } else if(r&&r.error){showFloat('❌ '+r.error);}
+  });
 }
 function buyGem(i){let u=GEM_UPGRADES[i],c=cost(u);if(gems>=c&&(!u.max||u.count<u.max)){gems-=c;u.count++;applyGemUpgrades();renderPrestige();}}
-function buyMaxClick(){CLICK_UPGRADES.forEach((_,i)=>buyClick(i,999));}
-function buyMaxAuto(){AUTO_UPGRADES.forEach((_,i)=>buyAuto(i,999));}
+function buyMaxClick(){for(let i=0;i<CLICK_UPGRADES.length;i++)buyClick(i,1);}
+function buyMaxAuto(){for(let i=0;i<AUTO_UPGRADES.length;i++)buyAuto(i,1);}
 function recalcGPS(){let b=0;AUTO_UPGRADES.forEach(u=>b+=u.gps*u.count);let g=1+GEM_UPGRADES[1].count*0.5;gps=b*g*prestigeMultiplier;}
 function applyGemUpgrades(){clickMultiplier=1+GEM_UPGRADES[0].count*0.5;recalcGPS();}
 
