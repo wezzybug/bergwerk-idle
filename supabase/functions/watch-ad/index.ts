@@ -16,6 +16,7 @@ const AD_BOOST_DURATIONS: Record<string, number> = {
   gps_boost: 600,     // 10 Minuten
   gold_boost: 180,    // 3 Minuten
   job_skip: 0,        // Sofort
+  gems: 0,            // Sofort (kein Boost, nur +1 Gem)
 };
 
 Deno.serve(async (req: Request) => {
@@ -104,8 +105,33 @@ Deno.serve(async (req: Request) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Neuen Boost erstellen
+    // Neuen Boost erstellen (oder +1 Gem ohne Boost)
     const duration = AD_BOOST_DURATIONS[adType];
+    if (adType === 'gems') {
+      const { error: insertErr } = await supabase.from("ad_watches").insert({
+        user_id: userId,
+        ad_type: adType,
+        expires_at: now.toISOString(),
+      });
+      if (insertErr) {
+        return new Response(JSON.stringify({ error: "Failed to register ad watch", details: insertErr.message }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      // Update game_state: +1 Gem, -5000 Gold
+      await supabase.from("game_state").update({
+        gold: gold - 5000,
+        gems: gems + 1,
+        last_save: now.toISOString(),
+      }, { onConflict: "user_id" });
+      return new Response(JSON.stringify({
+        success: true,
+        ad_type: adType,
+        gems: gems + 1,
+        gold: gold - 5000,
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const expiresAt = new Date(now.getTime() + duration * 1000);
 
     const { error: insertErr } = await supabase.from("ad_watches").insert({
