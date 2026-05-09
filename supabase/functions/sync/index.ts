@@ -57,8 +57,7 @@ Deno.serve(async (req: Request) => {
       const { id: userId } = await getOrCreateUser(supabase, deviceId);
 
       const { data: state } = await supabase.from("game_state").select("*").eq("user_id", userId).single();
-
-      // Calculate offline GPS earnings
+      const { data: profile } = await supabase.from("profiles").select("display_name").eq("id", userId).single();
       if (state) {
         const elapsed = Math.max(0, (Date.now() - new Date(state.last_save || state.updated_at || Date.now()).getTime()) / 1000);
         const gpsEarnings = Math.floor((state.gps || 0) * (state.prestige_multiplier || 1) * Math.min(elapsed, 86400));
@@ -95,6 +94,7 @@ Deno.serve(async (req: Request) => {
 
       return new Response(JSON.stringify({
         success: true, user_id: userId,
+        display_name: profile?.display_name || null,
         state: state || {}, upgrades: upgrades || [], achievements: achievements || [],
         ad_boosts: adBoosts || [], jobs: jobs || [], stocks: stocks || [],
         stock_prices: stockPrices || [],
