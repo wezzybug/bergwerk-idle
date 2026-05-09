@@ -57,6 +57,25 @@ Deno.serve(async (req: Request) => {
       const { id: userId } = await getOrCreateUser(supabase, deviceId);
 
       const { data: state } = await supabase.from("game_state").select("*").eq("user_id", userId).single();
+
+      // Calculate offline GPS earnings
+      if (state) {
+        const elapsed = Math.max(0, (Date.now() - new Date(state.last_save || state.updated_at || Date.now()).getTime()) / 1000);
+        const gpsEarnings = Math.floor((state.gps || 0) * (state.prestige_multiplier || 1) * Math.min(elapsed, 86400));
+        if (gpsEarnings > 0) {
+          state.gold = (state.gold || 0) + gpsEarnings;
+          state.total_gold = (state.total_gold || 0) + gpsEarnings;
+          state.total_gold_all_time = (state.total_gold_all_time || 0) + gpsEarnings;
+          state.last_save = new Date().toISOString();
+          // Persist the GPS earnings
+          await supabase.from("game_state").update({
+            gold: state.gold,
+            total_gold: state.total_gold,
+            total_gold_all_time: state.total_gold_all_time,
+            last_save: state.last_save
+          }).eq("user_id", userId);
+        }
+      }
       const { data: upgrades } = await supabase.from("upgrades").select("*").eq("user_id", userId);
       const { data: achievements } = await supabase.from("achievements").select("achievement_id, unlocked_at").eq("user_id", userId);
       const { data: adBoosts } = await supabase.from("ad_watches").select("ad_type, expires_at").eq("user_id", userId).gt("expires_at", new Date().toISOString());
