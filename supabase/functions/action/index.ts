@@ -26,6 +26,15 @@ function calcUpgradeCost(base: number, mult: number, count: number): number {
   return Math.floor(base * Math.pow(mult, count));
 }
 
+// Helper: Batch-Kosten für n Upgrades ab aktuellem Count
+function calcBatchUpgradeCost(base: number, mult: number, count: number, qty: number): number {
+  let total = 0;
+  for (let i = 0; i < qty; i++) {
+    total += Math.floor(base * Math.pow(mult, count + i));
+  }
+  return total;
+}
+
 // Helper: berechne Job-Reward (GPS-scaled)
 function calcJobReward(baseReward: number, gps: number, prestigeMultiplier: number, duration: number): number {
   const scaledGps = Math.max(1, 1 + Math.log10(Math.max(gps, 1)) * 0.5);
@@ -235,9 +244,10 @@ Deno.serve(async (req: Request) => {
         break;
       }
 
-      // ==================== CLICK UPGRADE ====================
+      // ==================== CLICK UPGRADE (supports quantity) ====================
       case "buy_click_upgrade": {
         const index = body.data?.index ?? body.index;
+        const qty = Math.min(body.data?.quantity ?? 1, 10000);
         if (typeof index !== "number" || index < 0 || index >= CLICK_UPGRADES.length) {
           return new Response(JSON.stringify({ error: "Invalid upgrade index" }), {
             status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -253,7 +263,7 @@ Deno.serve(async (req: Request) => {
           .single();
 
         const count = upgrade?.count || 0;
-        const cost = calcUpgradeCost(CLICK_UPGRADES[index].base, CLICK_UPGRADES[index].mult, count);
+        const cost = calcBatchUpgradeCost(CLICK_UPGRADES[index].base, CLICK_UPGRADES[index].mult, count, qty);
 
         if (gold < cost) {
           return new Response(JSON.stringify({ success: false, error: "Not enough gold" }), {
@@ -261,8 +271,8 @@ Deno.serve(async (req: Request) => {
           });
         }
 
-        const newClickPower = clickPower + CLICK_UPGRADES[index].power;
-        const newUpgradeCount = count + 1;
+        const newClickPower = clickPower + CLICK_UPGRADES[index].power * qty;
+        const newUpgradeCount = count + qty;
 
         await supabase.from("upgrades").upsert({
           user_id: userId,
@@ -276,15 +286,14 @@ Deno.serve(async (req: Request) => {
           user_id: userId,
           gold: newGold,
           click_power: newClickPower,
-          total_upgrades_bought: totalUpgradesBought + 1,
+          total_upgrades_bought: totalUpgradesBought + qty,
           last_save: timestamp.toISOString(),
         }, { onConflict: "user_id" });
 
         response = {
           success: true,
           action: "buy_click_upgrade",
-          index,
-          cost,
+          index, quantity: qty, cost,
           gold: newGold,
           click_power: newClickPower,
           upgrade_count: newUpgradeCount,
@@ -292,9 +301,10 @@ Deno.serve(async (req: Request) => {
         break;
       }
 
-      // ==================== AUTO UPGRADE ====================
+      // ==================== AUTO UPGRADE (supports quantity) ====================
       case "buy_auto_upgrade": {
         const index = body.data?.index ?? body.index;
+        const qty = Math.min(body.data?.quantity ?? 1, 10000);
         if (typeof index !== "number" || index < 0 || index >= AUTO_UPGRADES.length) {
           return new Response(JSON.stringify({ error: "Invalid upgrade index" }), {
             status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -310,7 +320,7 @@ Deno.serve(async (req: Request) => {
           .single();
 
         const count = upgrade?.count || 0;
-        const cost = calcUpgradeCost(AUTO_UPGRADES[index].base, AUTO_UPGRADES[index].mult, count);
+        const cost = calcBatchUpgradeCost(AUTO_UPGRADES[index].base, AUTO_UPGRADES[index].mult, count, qty);
 
         if (gold < cost) {
           return new Response(JSON.stringify({ success: false, error: "Not enough gold" }), {
@@ -318,7 +328,7 @@ Deno.serve(async (req: Request) => {
           });
         }
 
-        const newUpgradeCount = count + 1;
+        const newUpgradeCount = count + qty;
 
         await supabase.from("upgrades").upsert({
           user_id: userId,
@@ -327,7 +337,6 @@ Deno.serve(async (req: Request) => {
           count: newUpgradeCount,
         }, { onConflict: "user_id,upgrade_type,upgrade_index" });
 
-        // Recalculate GPS from all auto upgrades
         const newGps = await recalcGPS(supabase, userId);
 
         const newGold = gold - cost;
@@ -335,15 +344,14 @@ Deno.serve(async (req: Request) => {
           user_id: userId,
           gold: newGold,
           gps: newGps,
-          total_upgrades_bought: totalUpgradesBought + 1,
+          total_upgrades_bought: totalUpgradesBought + qty,
           last_save: timestamp.toISOString(),
         }, { onConflict: "user_id" });
 
         response = {
           success: true,
           action: "buy_auto_upgrade",
-          index,
-          cost,
+          index, quantity: qty, cost,
           gold: newGold,
           gps: newGps,
           upgrade_count: newUpgradeCount,
@@ -667,6 +675,58 @@ Deno.serve(async (req: Request) => {
         break;
       }
 
+      // ==================== BUY BOOST (gold → temp boost) ====================
+      case "buy_boost": {
+        const boostType = body.data?.boost_type ?? body.boost_type;
+        let boostCost = 0;
+        let boostDuration = 0;
+        let boostEffect = "";
+
+        switch (boostType) {
+          case "gps_2h": boostCost = 100000; boostDuration = 7200; boostEffect = "auto"; break;
+          case "click_1h": boostCost = 50000; boostDuration = 3600; boostEffect = "click"; break;
+          case "lucky": {
+            if (gold < 1000) {
+              return new Response(JSON.stringify({ success: false, error: "Not enough gold" }), {
+                status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+              });
+            }
+            const luckyBonus = Math.floor(Math.random() * 49500) + 500;
+            const newGold = gold - 1000 + luckyBonus;
+            await supabase.from("game_state").upsert({
+              user_id: userId, gold: newGold, last_save: timestamp.toISOString(),
+            }, { onConflict: "user_id" });
+            response = { success: true, action: "buy_boost", reward: luckyBonus, gold: newGold };
+            break;
+          }
+          default:
+            return new Response(JSON.stringify({ error: "Unknown boost type" }), {
+              status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+        }
+
+        if (boostType !== "lucky") {
+          if (gold < boostCost) {
+            return new Response(JSON.stringify({ success: false, error: "Not enough gold" }), {
+              status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          const newGold = gold - boostCost;
+          const boostEnd = new Date(Date.now() + boostDuration * 1000);
+          await supabase.from("game_state").upsert({
+            user_id: userId, gold: newGold,
+            active_boost: boostEffect, boost_end: boostEnd.toISOString(),
+            last_save: timestamp.toISOString(),
+          }, { onConflict: "user_id" });
+          response = {
+            success: true, action: "buy_boost",
+            boost: boostEffect, boost_end: boostEnd.getTime(),
+            gold: newGold,
+          };
+        }
+        break;
+      }
+
       // ==================== PRESTIGE ====================
       case "prestige": {
         if (totalGoldAllTime < 1e7) {
@@ -714,7 +774,7 @@ Deno.serve(async (req: Request) => {
 
       default:
         return new Response(JSON.stringify({ error: "Unknown action", valid_actions: [
-          "mine", "buy_click_upgrade", "buy_auto_upgrade", "buy_gem_upgrade",
+          "mine", "buy_click_upgrade", "buy_auto_upgrade", "buy_gem_upgrade", "buy_boost",
           "start_job", "claim_job", "buy_stock", "sell_stock", "prestige"
         ] }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
