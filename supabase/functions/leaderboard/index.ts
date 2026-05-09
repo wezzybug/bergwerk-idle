@@ -1,6 +1,7 @@
 // ============================================
 // Bergwerk Idle — GET /leaderboard
 // Top-Spieler nach Gold, Prestige, etc.
+// v2: Added display_name support
 // ============================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -42,7 +43,7 @@ Deno.serve(async (req: Request) => {
 
     let query = supabase
       .from("game_state")
-      .select("user_id, total_gold_all_time, prestige_multiplier, total_clicks, gps")
+      .select("user_id, total_gold_all_time, prestige_multiplier, total_clicks, gps, gold, gems")
       .range(offset, offset + limit - 1);
 
     // Sortierung
@@ -69,7 +70,7 @@ Deno.serve(async (req: Request) => {
     const userIds = (states || []).map((s: any) => s.user_id);
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, device_id")
+      .select("id, display_name, device_id")
       .in("id", userIds);
 
     const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
@@ -77,14 +78,19 @@ Deno.serve(async (req: Request) => {
     // Leaderboard zusammenbauen
     const leaderboard = (states || [])
       .filter((s: any) => !bannedList.includes(s.user_id))
-      .map((s: any, i: number) => ({
-        rank: offset + i + 1,
-        user_id: s.user_id.slice(0, 8) + "...", // Privacy: nur erste 8 Zeichen
-        total_gold: s.total_gold_all_time,
-        prestige: s.prestige_multiplier,
-        total_clicks: s.total_clicks,
-        gps: s.gps,
-      }));
+      .map((s: any, i: number) => {
+        const profile = profileMap.get(s.user_id);
+        const displayName = profile?.display_name || (profile?.device_id ? profile.device_id.substring(0, 8) + "..." : "???");
+        return {
+          rank: offset + i + 1,
+          user_id: s.user_id.slice(0, 8) + "...",
+          display_name: displayName,
+          total_gold: s.total_gold_all_time,
+          prestige: s.prestige_multiplier,
+          total_clicks: s.total_clicks,
+          gps: s.gps,
+        };
+      });
 
     return new Response(JSON.stringify({
       success: true,

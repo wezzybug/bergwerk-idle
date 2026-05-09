@@ -2,6 +2,7 @@
 // Bergwerk Idle — /sync
 // GET: Game State laden, POST: Game State speichern
 // Device-ID Auth (kein Login nötig)
+// v2: Fixed job sync format (active, start_time, cooldown_end)
 // ============================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -59,9 +60,19 @@ Deno.serve(async (req: Request) => {
       const { data: upgrades } = await supabase.from("upgrades").select("*").eq("user_id", userId);
       const { data: achievements } = await supabase.from("achievements").select("achievement_id, unlocked_at").eq("user_id", userId);
       const { data: adBoosts } = await supabase.from("ad_watches").select("ad_type, expires_at").eq("user_id", userId).gt("expires_at", new Date().toISOString());
-      const { data: jobs } = await supabase.from("jobs").select("job_index, count, payout").eq("user_id", userId);
+      const { data: jobs } = await supabase.from("jobs").select("job_index, count, status, start_time, duration_ms, cooldown_end").eq("user_id", userId);
       const { data: stocks } = await supabase.from("stock_holdings").select("stock_index, shares, avg_buy_price").eq("user_id", userId);
       const { data: stockPrices } = await supabase.from("stock_prices").select("stock_index, current_price, prev_price, trend").order("stock_index");
+
+      // Process active boosts
+      let activeBoost = null;
+      let boostEnd = null;
+      let activeAdBoost = null;
+      if (adBoosts && adBoosts.length > 0) {
+        // Use the latest ad boost
+        const latest = adBoosts[adBoosts.length - 1];
+        activeAdBoost = { type: latest.ad_type === 'click_boost' ? 'click' : latest.ad_type === 'gps_boost' ? 'auto' : 'gold', end: new Date(latest.expires_at).getTime() };
+      }
 
       return new Response(JSON.stringify({
         success: true, user_id: userId,
