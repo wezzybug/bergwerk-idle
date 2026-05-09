@@ -232,6 +232,17 @@ Deno.serve(async (req: Request) => {
           last_save: timestamp.toISOString(),
         }, { onConflict: "user_id" });
 
+        // Achievement checks
+        if (newTotalClicks >= 10) await supabase.from("achievements").upsert({ user_id: userId, achievement_id: 'click10' }, { onConflict: "user_id,achievement_id" });
+        if (newTotalClicks >= 100) await supabase.from("achievements").upsert({ user_id: userId, achievement_id: 'click100' }, { onConflict: "user_id,achievement_id" });
+        if (newTotalClicks >= 1000) await supabase.from("achievements").upsert({ user_id: userId, achievement_id: 'click1k' }, { onConflict: "user_id,achievement_id" });
+        if (newTotalClicks >= 10000) await supabase.from("achievements").upsert({ user_id: userId, achievement_id: 'click10k' }, { onConflict: "user_id,achievement_id" });
+        if (totalGoldAllTime + reward >= 1000) await supabase.from("achievements").upsert({ user_id: userId, achievement_id: 'gold1k' }, { onConflict: "user_id,achievement_id" });
+        if (totalGoldAllTime + reward >= 1e6) await supabase.from("achievements").upsert({ user_id: userId, achievement_id: 'gold1m' }, { onConflict: "user_id,achievement_id" });
+        if (totalGoldAllTime + reward >= 1e7) await supabase.from("achievements").upsert({ user_id: userId, achievement_id: 'gold10m' }, { onConflict: "user_id,achievement_id" });
+        if (totalGoldAllTime + reward >= 1e9) await supabase.from("achievements").upsert({ user_id: userId, achievement_id: 'gold1b' }, { onConflict: "user_id,achievement_id" });
+        if (totalGoldAllTime + reward >= 1e12) await supabase.from("achievements").upsert({ user_id: userId, achievement_id: 'gold1t' }, { onConflict: "user_id,achievement_id" });
+
         response = {
           success: true,
           action: "mine",
@@ -290,6 +301,11 @@ Deno.serve(async (req: Request) => {
           last_save: timestamp.toISOString(),
         }, { onConflict: "user_id" });
 
+        // Achievement check: total_upgrades_bought
+        if ((totalUpgradesBought + qty) >= 50) await supabase.from("achievements").upsert({
+          user_id: userId, achievement_id: 'upgrade50',
+        }, { onConflict: "user_id,achievement_id" });
+
         response = {
           success: true,
           action: "buy_click_upgrade",
@@ -347,6 +363,9 @@ Deno.serve(async (req: Request) => {
           total_upgrades_bought: totalUpgradesBought + qty,
           last_save: timestamp.toISOString(),
         }, { onConflict: "user_id" });
+
+        // Achievement check
+        if ((totalUpgradesBought + qty) >= 50) await supabase.from("achievements").upsert({ user_id: userId, achievement_id: 'upgrade50' }, { onConflict: "user_id,achievement_id" });
 
         response = {
           success: true,
